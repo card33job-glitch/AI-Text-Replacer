@@ -116,7 +116,9 @@ Configuration et historique sont stockés dans
 
 ## Stack
 
-- **Backend** : Rust + Tauri 1.5 (`enigo` pour la simulation clavier, `winapi` pour le focus)
+- **Backend** : Rust + Tauri 1.5 — `enigo` pour la simulation clavier, `winapi` pour le
+  focus et les modificateurs sous Windows, `cocoa`/`objc` pour leurs équivalents macOS
+- **CI** : GitHub Actions compile les deux plateformes à chaque poussée
 - **Frontend** : React + TypeScript + Vite
 - Deux fenêtres partagent le même bundle : la principale et la popup
   (`index.html?view=popup`)
@@ -158,9 +160,15 @@ src-tauri/src/
 - Le remplacement sur place ne fonctionne que dans les zones de saisie qui acceptent
   Ctrl+V. Dans un champ en lecture seule, le résultat est copié dans le presse-papiers
   et un message le signale.
-- macOS : le code de capture/collage est présent mais le retour de focus vers
-  l'application d'origine n'est pas implémenté (il faudrait passer par l'API
-  Accessibility). Non testé.
+- macOS : l'implémentation est complète (réactivation de l'application d'origine via
+  `NSRunningApplication`, position du curseur via `NSEvent`, témoin non activable via
+  `orderFrontRegardless`), **mais elle n'a jamais été exécutée sur un Mac** — elle n'est
+  vérifiée qu'à la compilation, par la CI. Attendez-vous à des ajustements.
+- macOS : le témoin se place sous la souris et non au point d'insertion. L'équivalent du
+  `GetGUIThreadInfo` de Windows demanderait un aller-retour `AXUIElement` par application.
+- macOS : l'autorisation « Accessibilité » est obligatoire. Sans elle les raccourcis se
+  déclenchent sans rien produire ; l'application affiche un bandeau et un lien vers le
+  bon panneau des Réglages Système.
 
 ## Licence
 

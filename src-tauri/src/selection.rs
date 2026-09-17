@@ -92,6 +92,10 @@ mod platform {
         unsafe { (GetAsyncKeyState(vk) as u16) & 0x8000 != 0 }
     }
 
+    pub fn modifiers_down() -> bool {
+        is_key_down(VK_SHIFT) || is_key_down(VK_CONTROL) || is_key_down(VK_ALT)
+    }
+
     /// Position du point d'insertion dans la fenêtre cible, en coordonnées écran.
     ///
     /// Plus pertinent que la position de la souris pour poser un témoin « à côté
@@ -121,7 +125,88 @@ mod platform {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "macos")]
+mod platform {
+    use cocoa::appkit::{NSEvent, NSScreen};
+    use cocoa::base::{id, nil, BOOL, YES};
+    use cocoa::foundation::{NSArray, NSPoint, NSRect};
+    use objc::{class, msg_send, sel, sel_impl};
+
+    /// macOS ne raisonne pas en fenêtres mais en applications : ce qu'on
+    /// mémorise est le PID de l'application au premier plan, et c'est elle
+    /// qu'on réactivera pour coller le résultat.
+    pub fn foreground_window() -> isize {
+        unsafe {
+            let workspace: id = msg_send![class!(NSWorkspace), sharedWorkspace];
+            if workspace == nil {
+                return 0;
+            }
+            let app: id = msg_send![workspace, frontmostApplication];
+            if app == nil {
+                return 0;
+            }
+            let pid: i32 = msg_send![app, processIdentifier];
+            pid as isize
+        }
+    }
+
+    pub fn focus_window(target: isize) -> bool {
+        if target == 0 {
+            return false;
+        }
+        unsafe {
+            let app: id = msg_send![
+                class!(NSRunningApplication),
+                runningApplicationWithProcessIdentifier: target as i32
+            ];
+            if app == nil {
+                return false;
+            }
+            // NSApplicationActivateIgnoringOtherApps : l'équivalent macOS du
+            // SetForegroundWindow de Windows, et il n'a pas besoin de ruse
+            // équivalente à AttachThreadInput.
+            let options: u64 = 1 << 1;
+            let activated: BOOL = msg_send![app, activateWithOptions: options];
+            activated == YES
+        }
+    }
+
+    /// `NSEvent` compte les pixels depuis le **bas** de l'écran principal,
+    /// Tauri depuis le haut : il faut retourner l'axe vertical.
+    pub fn cursor_position() -> Option<(i32, i32)> {
+        unsafe {
+            let point: NSPoint = NSEvent::mouseLocation(nil);
+            let screens: id = NSScreen::screens(nil);
+            if screens == nil || screens.count() == 0 {
+                return None;
+            }
+            let primary: id = screens.objectAtIndex(0);
+            let frame: NSRect = NSScreen::frame(primary);
+            Some((point.x as i32, (frame.size.height - point.y) as i32))
+        }
+    }
+
+    /// L'API d'accessibilité donnerait la position du curseur de texte, mais
+    /// au prix d'un aller-retour `AXUIElement` par application. Le repli sur
+    /// la souris, déjà prévu par l'appelant, suffit.
+    pub fn caret_position(_target: isize) -> Option<(i32, i32)> {
+        None
+    }
+
+    pub fn modifiers_down() -> bool {
+        // NSEventModifierFlags
+        const SHIFT: u64 = 1 << 17;
+        const CONTROL: u64 = 1 << 18;
+        const OPTION: u64 = 1 << 19;
+        const COMMAND: u64 = 1 << 20;
+        unsafe {
+            let flags: u64 = msg_send![class!(NSEvent), modifierFlags];
+            flags & (SHIFT | CONTROL | OPTION | COMMAND) != 0
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 mod platform {
     pub fn foreground_window() -> isize {
         0
@@ -134,6 +219,9 @@ mod platform {
     }
     pub fn caret_position(_target: isize) -> Option<(i32, i32)> {
         None
+    }
+    pub fn modifiers_down() -> bool {
+        false
     }
 }
 
@@ -162,23 +250,22 @@ pub fn target_window() -> isize {
 /// comme un appui bref sur Alt seul, ce qui active la barre de menus et fait
 /// biper les applications qui n'en ont pas.
 fn wait_for_clean_modifiers(enigo: &mut Enigo) {
+    const POLL_MS: u64 = 15;
+    const MAX_WAIT_MS: u64 = 700;
+
+    let mut waited = 0;
+    while waited < MAX_WAIT_MS {
+        if !platform::modifiers_down() {
+            return;
+        }
+        thread::sleep(Duration::from_millis(POLL_MS));
+        waited += POLL_MS;
+    }
+
+    // Filet de sécurité : l'utilisateur tient toujours ses touches.
     #[cfg(target_os = "windows")]
     {
-        const POLL_MS: u64 = 15;
-        const MAX_WAIT_MS: u64 = 700;
-
-        let mut waited = 0;
-        while waited < MAX_WAIT_MS {
-            if !platform::is_key_down(platform::VK_SHIFT)
-                && !platform::is_key_down(platform::VK_CONTROL)
-                && !platform::is_key_down(platform::VK_ALT)
-            {
-                return;
-            }
-            thread::sleep(Duration::from_millis(POLL_MS));
-            waited += POLL_MS;
-        }
-
+        // Ne relâcher que ce qui est réellement enfoncé.
         if platform::is_key_down(platform::VK_SHIFT) {
             enigo.key_up(Key::Shift);
         }
@@ -188,15 +275,17 @@ fn wait_for_clean_modifiers(enigo: &mut Enigo) {
         if platform::is_key_down(platform::VK_ALT) {
             enigo.key_up(Key::Alt);
         }
-        thread::sleep(Duration::from_millis(40));
     }
     #[cfg(not(target_os = "windows"))]
     {
+        // Le piège du WM_KEYUP isolé sur Alt est propre à Windows : ailleurs,
+        // relâcher sans condition ne coûte rien.
         enigo.key_up(Key::Shift);
         enigo.key_up(Key::Control);
         enigo.key_up(Key::Alt);
-        thread::sleep(Duration::from_millis(60));
+        enigo.key_up(Key::Meta);
     }
+    thread::sleep(Duration::from_millis(40));
 }
 
 #[cfg(target_os = "macos")]

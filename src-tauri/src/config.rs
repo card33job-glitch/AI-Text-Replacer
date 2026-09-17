@@ -65,24 +65,23 @@ pub struct ShortcutBinding {
 
 pub const MENU_ACTION: &str = "menu";
 
+/// Modificateur par défaut : un utilisateur macOS attend Cmd là où un
+/// utilisateur Windows attend Ctrl.
+#[cfg(target_os = "macos")]
+const DEFAULT_MODIFIERS: &str = "Cmd+Shift+";
+#[cfg(not(target_os = "macos"))]
+const DEFAULT_MODIFIERS: &str = "Ctrl+Shift+";
+
 pub fn default_shortcuts() -> Vec<ShortcutBinding> {
+    let binding = |key: &str, action: &str| ShortcutBinding {
+        accelerator: format!("{}{}", DEFAULT_MODIFIERS, key),
+        action: action.to_string(),
+    };
     vec![
-        ShortcutBinding {
-            accelerator: "Ctrl+Shift+T".to_string(),
-            action: MENU_ACTION.to_string(),
-        },
-        ShortcutBinding {
-            accelerator: "Ctrl+Shift+G".to_string(),
-            action: "grammar".to_string(),
-        },
-        ShortcutBinding {
-            accelerator: "Ctrl+Shift+R".to_string(),
-            action: "rephrase".to_string(),
-        },
-        ShortcutBinding {
-            accelerator: "Ctrl+Shift+D".to_string(),
-            action: "prompt".to_string(),
-        },
+        binding("T", MENU_ACTION),
+        binding("G", "grammar"),
+        binding("R", "rephrase"),
+        binding("D", "prompt"),
     ]
 }
 

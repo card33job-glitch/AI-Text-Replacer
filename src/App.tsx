@@ -1,5 +1,6 @@
 import React from 'react'
 import './App.css'
+import AccessibilityNotice from './components/AccessibilityNotice'
 import MainPanel from './components/MainPanel'
 import SettingsPanel from './components/SettingsPanel'
 import HistoryPanel from './components/HistoryPanel'
@@ -33,6 +34,7 @@ function App() {
       </nav>
 
       <main className="content">
+        <AccessibilityNotice />
         {currentView === 'main' && <MainPanel />}
         {currentView === 'history' && <HistoryPanel />}
         {currentView === 'settings' && <SettingsPanel />}

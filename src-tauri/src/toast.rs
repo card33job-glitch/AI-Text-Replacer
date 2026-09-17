@@ -103,9 +103,33 @@ fn emit(app: &AppHandle, state: ToastState, reposition: bool) -> u64 {
         }
     }
 
-    let _ = window.show();
+    platform_show(&window);
     let _ = window.set_always_on_top(true);
     generation
+}
+
+#[cfg(target_os = "macos")]
+fn platform_show(window: &Window) {
+    use cocoa::base::id;
+    use objc::{msg_send, sel, sel_impl};
+
+    // `show()` de Tauri appelle `makeKeyAndOrderFront:`, qui donnerait le focus
+    // au témoin — exactement ce qu'il ne doit jamais faire.
+    // `orderFrontRegardless` l'affiche sans le rendre fenêtre clé.
+    match window.ns_window() {
+        Ok(handle) => unsafe {
+            let ns_window = handle as id;
+            let _: () = msg_send![ns_window, orderFrontRegardless];
+        },
+        Err(_) => {
+            let _ = window.show();
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn platform_show(window: &Window) {
+    let _ = window.show();
 }
 
 fn schedule_hide(app: &AppHandle, generation: u64, delay_ms: u64) {
@@ -141,7 +165,27 @@ fn make_non_activating(window: &Window) {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "macos")]
+fn make_non_activating(window: &Window) {
+    use cocoa::base::{id, YES};
+    use objc::{msg_send, sel, sel_impl};
+
+    if let Ok(handle) = window.ns_window() {
+        unsafe {
+            let ns_window = handle as id;
+            // NSStatusWindowLevel : au-dessus des fenêtres ordinaires.
+            let _: () = msg_send![ns_window, setLevel: 25i64];
+            // Purement informatif : le témoin laisse passer les clics.
+            let _: () = msg_send![ns_window, setIgnoresMouseEvents: YES];
+            // Visible sur tous les bureaux, absent du cycle Cmd+Tab.
+            // NSWindowCollectionBehaviorCanJoinAllSpaces | Transient
+            let behavior: u64 = (1 << 0) | (1 << 3);
+            let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 fn make_non_activating(_window: &Window) {}
 
 /// Pose le témoin à côté du point d'insertion, ou à défaut du curseur souris.

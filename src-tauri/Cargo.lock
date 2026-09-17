@@ -21,8 +21,10 @@ dependencies = [
 name = "ai-text-replacer"
 version = "0.1.0"
 dependencies = [
+ "cocoa",
  "enigo",
  "lazy_static",
+ "objc",
  "reqwest",
  "serde",
  "serde_json",

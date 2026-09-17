@@ -227,6 +227,11 @@ pub async fn open_main_window(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn accessibility_status() -> Result<crate::permissions::AccessibilityStatus, String> {
+    Ok(crate::permissions::status())
+}
+
+#[tauri::command]
 pub async fn get_history(app: AppHandle) -> Result<Vec<HistoryEntry>, String> {
     Ok(config::history(&app))
 }

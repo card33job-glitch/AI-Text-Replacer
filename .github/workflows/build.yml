@@ -1,0 +1,48 @@
+name: Build
+
+# Le développement se fait sous Windows : cette CI existe surtout pour que le
+# code macOS, qui ne peut pas être compilé localement, soit vérifié à chaque
+# poussée plutôt qu'au moment où quelqu'un tente de l'utiliser.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Dépendances Node
+        run: npm ci
+
+      - name: Types TypeScript
+        run: npx tsc --noEmit
+
+      # `generate_context!` lit tauri.conf.json et exige que distDir existe
+      # déjà : le frontend doit donc être construit avant le code Rust.
+      - name: Frontend
+        run: npx vite build
+
+      - name: Rust
+        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets

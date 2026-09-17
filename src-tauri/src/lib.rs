@@ -3,6 +3,7 @@ pub mod ai;
 pub mod clipboard;
 pub mod commands;
 pub mod config;
+pub mod permissions;
 pub mod popup;
 pub mod selection;
 pub mod shortcuts;

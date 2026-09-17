@@ -29,13 +29,18 @@ const TARGET_LANGUAGES = [
   { value: 'français', label: 'Français' },
 ]
 
+const IS_MAC = navigator.userAgent.includes('Mac')
+
 /** Traduit un événement clavier en accélérateur Tauri ("Ctrl+Shift+T"). */
 function toAccelerator(e: React.KeyboardEvent<HTMLInputElement>): string | null {
   const parts: string[] = []
+  // Sur macOS, la touche Command se nomme « Cmd » côté Tauri ; « Super » y est
+  // accepté mais s'afficherait de façon déroutante dans les Paramètres.
+  if (e.metaKey && IS_MAC) parts.push('Cmd')
   if (e.ctrlKey) parts.push('Ctrl')
-  if (e.altKey) parts.push('Alt')
+  if (e.altKey) parts.push(IS_MAC ? 'Option' : 'Alt')
   if (e.shiftKey) parts.push('Shift')
-  if (e.metaKey) parts.push('Super')
+  if (e.metaKey && !IS_MAC) parts.push('Super')
 
   const code = e.code
   let key = ''

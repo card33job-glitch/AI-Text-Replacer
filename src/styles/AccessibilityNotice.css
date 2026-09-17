@@ -1,0 +1,41 @@
+.permission-banner {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border: 1px solid #f0c987;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #fff8e6;
+  color: #6b5416;
+  line-height: 1.5;
+}
+
+.permission-banner strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #5a4512;
+}
+
+.permission-banner p {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.permission-banner .steps {
+  font-size: 13px;
+  color: #7a6220;
+}
+
+.permission-banner button {
+  padding: 7px 14px;
+  border: 1px solid #d8a93f;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #6b5416;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.permission-banner button:hover {
+  background: #fdf1d5;
+}

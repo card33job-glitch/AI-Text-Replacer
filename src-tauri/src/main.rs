@@ -7,6 +7,7 @@ mod ai;
 mod clipboard;
 mod commands;
 mod config;
+mod permissions;
 mod popup;
 mod selection;
 mod shortcuts;
@@ -88,6 +89,7 @@ fn main() {
             commands::replace_selection,
             commands::hide_popup,
             commands::open_main_window,
+            commands::accessibility_status,
             commands::get_history,
             commands::clear_history,
         ])
