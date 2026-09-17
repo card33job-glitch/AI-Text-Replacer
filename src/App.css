@@ -1,0 +1,54 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: white;
+}
+
+.navbar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fafafa;
+  padding: 0;
+}
+
+.navbar button {
+  flex: 1;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  border-bottom: 3px solid transparent;
+  transition: all 0.3s ease;
+  color: #666;
+}
+
+.navbar button:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.navbar button.active {
+  color: #007acc;
+  border-bottom-color: #007acc;
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+@media (max-width: 600px) {
+  .navbar button {
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+  
+  .content {
+    padding: 12px;
+  }
+}

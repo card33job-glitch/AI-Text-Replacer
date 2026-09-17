@@ -1,0 +1,236 @@
+.settings-panel {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.section {
+  margin-bottom: 32px;
+}
+
+.section h2 {
+  font-size: 18px;
+  margin-bottom: 16px;
+  color: #333;
+}
+
+.section label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #555;
+}
+
+.section input[type="text"],
+.section input[type="password"] {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.section input[type="text"]:focus,
+.section input[type="password"]:focus {
+  outline: none;
+  border-color: #007acc;
+  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.1);
+}
+
+.help-text {
+  font-size: 13px;
+  color: #777;
+  margin-top: 8px;
+  margin-bottom: 16px;
+}
+
+.checkbox-group {
+  background: #f9f9f9;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  border: 1px solid #e0e0e0;
+}
+
+.checkbox-group label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-weight: normal;
+  cursor: pointer;
+}
+
+.checkbox-group input[type="checkbox"] {
+  margin-top: 4px;
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.checkbox-group span {
+  font-weight: 500;
+  color: #333;
+}
+
+.checkbox-group .help-text {
+  margin: 8px 0 0 26px;
+  margin-bottom: 0;
+}
+
+.api-config {
+  background: #f9f9f9;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  margin-bottom: 12px;
+}
+
+.api-header {
+  margin-bottom: 12px;
+}
+
+.api-header label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.api-header input[type="checkbox"] {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+}
+
+.api-config input[type="password"] {
+  margin: 0;
+}
+
+.save-btn {
+  width: 100%;
+  padding: 12px;
+  background: #007acc;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.save-btn:hover:not(:disabled) {
+  background: #005a9e;
+}
+
+.save-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.section select,
+.section textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  margin-bottom: 12px;
+  resize: vertical;
+}
+
+/* Champ de capture : il n'accepte pas la frappe, il enregistre la combinaison. */
+.shortcut-input {
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  background: #f5f7fa;
+}
+
+.shortcut-input:focus {
+  background: #fff8e1;
+}
+
+.shortcut-row {
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+}
+
+.shortcut-row label {
+  margin-bottom: 6px;
+  color: #333;
+  font-weight: 600;
+}
+
+.shortcut-row .shortcut-input {
+  margin-bottom: 0;
+}
+
+.shortcut-row .help-text {
+  margin: 8px 0 0;
+}
+
+.warning-text {
+  padding: 10px 12px;
+  background: #fff8e6;
+  border: 1px solid #f0d9a0;
+  border-radius: 6px;
+  color: #6b5416;
+}
+
+.warning-text kbd {
+  padding: 1px 5px;
+  border: 1px solid #d8c286;
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: #ffffff;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.badge {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #007acc;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.status-ok,
+.status-error {
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.status-ok {
+  background: #e7f6ec;
+  border: 1px solid #b7e0c4;
+  color: #1c6b36;
+}
+
+.status-error {
+  background: #fdecec;
+  border: 1px solid #f5bcbc;
+  color: #9b1c1c;
+}
+
+@media (max-width: 600px) {
+  .settings-panel {
+    margin: 0;
+  }
+}

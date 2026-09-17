@@ -1,0 +1,337 @@
+//! Capture du texte sélectionné dans l'application active, et remplacement
+//! de cette sélection par le texte transformé.
+//!
+//! Le principe : on ne peut pas lire la sélection d'une application tierce
+//! (Teams, Outlook, un navigateur…) directement. On passe donc par le
+//! presse-papiers, en simulant Ctrl+C puis Ctrl+V, et on restaure le contenu
+//! initial du presse-papiers pour ne rien casser côté utilisateur.
+
+use enigo::{Enigo, Key, KeyboardControllable};
+use lazy_static::lazy_static;
+use std::sync::Mutex;
+use std::thread;
+use std::time::Duration;
+use tauri::AppHandle;
+
+lazy_static! {
+    /// Fenêtre qui avait le focus au moment où le raccourci a été pressé.
+    /// C'est là que le résultat devra être collé.
+    static ref TARGET_WINDOW: Mutex<isize> = Mutex::new(0);
+    /// Contenu du presse-papiers avant qu'on ne s'en serve comme véhicule.
+    static ref SAVED_CLIPBOARD: Mutex<Option<String>> = Mutex::new(None);
+}
+
+#[cfg(target_os = "windows")]
+mod platform {
+    use std::ptr::null_mut;
+    use winapi::shared::windef::{HWND, POINT};
+    use winapi::um::processthreadsapi::GetCurrentThreadId;
+    use winapi::um::winuser::{
+        AttachThreadInput, BringWindowToTop, ClientToScreen, GetAsyncKeyState, GetCursorPos,
+        GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId, IsIconic,
+        SetForegroundWindow, ShowWindow, GUITHREADINFO, SW_RESTORE,
+    };
+
+    pub fn foreground_window() -> isize {
+        unsafe { GetForegroundWindow() as isize }
+    }
+
+    /// Redonne le focus à une fenêtre.
+    ///
+    /// `SetForegroundWindow` est volontairement bridé par Windows : un
+    /// processus qui n'a pas le focus ne peut pas le voler. La parade
+    /// classique est d'attacher temporairement notre file d'entrées à celle
+    /// du thread de la fenêtre cible, ce qui nous fait passer pour "le même"
+    /// contexte d'entrée le temps de l'appel.
+    pub fn focus_window(handle: isize) -> bool {
+        if handle == 0 {
+            return false;
+        }
+        unsafe {
+            let hwnd = handle as HWND;
+            // Déclenché au clavier, rien ne lui a pris le focus : inutile de
+            // jouer la bascule d'entrées ci-dessous, qui n'est pas sans effets
+            // de bord sur la fenêtre cible.
+            if GetForegroundWindow() == hwnd {
+                return true;
+            }
+            if IsIconic(hwnd) != 0 {
+                ShowWindow(hwnd, SW_RESTORE);
+            }
+            let current = GetCurrentThreadId();
+            let target = GetWindowThreadProcessId(hwnd, null_mut());
+            let foreground = GetWindowThreadProcessId(GetForegroundWindow(), null_mut());
+
+            AttachThreadInput(current, target, 1);
+            AttachThreadInput(foreground, target, 1);
+            BringWindowToTop(hwnd);
+            let ok = SetForegroundWindow(hwnd) != 0;
+            AttachThreadInput(foreground, target, 0);
+            AttachThreadInput(current, target, 0);
+            ok
+        }
+    }
+
+    pub fn cursor_position() -> Option<(i32, i32)> {
+        unsafe {
+            let mut point = std::mem::zeroed();
+            if GetCursorPos(&mut point) != 0 {
+                Some((point.x, point.y))
+            } else {
+                None
+            }
+        }
+    }
+
+    pub const VK_SHIFT: i32 = 0x10;
+    pub const VK_CONTROL: i32 = 0x11;
+    pub const VK_ALT: i32 = 0x12;
+
+    /// Vrai si la touche est physiquement enfoncée à cet instant.
+    pub fn is_key_down(vk: i32) -> bool {
+        unsafe { (GetAsyncKeyState(vk) as u16) & 0x8000 != 0 }
+    }
+
+    /// Position du point d'insertion dans la fenêtre cible, en coordonnées écran.
+    ///
+    /// Plus pertinent que la position de la souris pour poser un témoin « à côté
+    /// de la phrase » : quand on déclenche au clavier, la souris peut être
+    /// n'importe où. Beaucoup d'applications (dont certaines Electron) ne
+    /// publient pas de caret, d'où le `None` fréquent.
+    pub fn caret_position(target: isize) -> Option<(i32, i32)> {
+        if target == 0 {
+            return None;
+        }
+        unsafe {
+            let mut info: GUITHREADINFO = std::mem::zeroed();
+            info.cbSize = std::mem::size_of::<GUITHREADINFO>() as u32;
+            let thread = GetWindowThreadProcessId(target as HWND, null_mut());
+            if GetGUIThreadInfo(thread, &mut info) == 0 || info.hwndCaret.is_null() {
+                return None;
+            }
+            let mut point = POINT {
+                x: info.rcCaret.right,
+                y: info.rcCaret.bottom,
+            };
+            if ClientToScreen(info.hwndCaret, &mut point) == 0 {
+                return None;
+            }
+            Some((point.x, point.y))
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+mod platform {
+    pub fn foreground_window() -> isize {
+        0
+    }
+    pub fn focus_window(_handle: isize) -> bool {
+        false
+    }
+    pub fn cursor_position() -> Option<(i32, i32)> {
+        None
+    }
+    pub fn caret_position(_target: isize) -> Option<(i32, i32)> {
+        None
+    }
+}
+
+pub use platform::{caret_position, cursor_position};
+
+/// Mémorise la fenêtre actuellement au premier plan comme cible du remplacement.
+pub fn remember_target_window() {
+    *TARGET_WINDOW.lock().unwrap() = platform::foreground_window();
+}
+
+pub fn target_window() -> isize {
+    *TARGET_WINDOW.lock().unwrap()
+}
+
+/// Attend que plus aucun modificateur ne soit physiquement enfoncé.
+///
+/// À appeler **avant chaque frappe simulée**, et pas une seule fois au début.
+/// Les touches modificatrices se répètent automatiquement sous Windows : si
+/// l'utilisateur tient encore son raccourci une demi-seconde, un Shift qu'on
+/// aurait relâché se ré-enfonce tout seul. Le Ctrl+C envoyé ensuite devient
+/// alors Ctrl+Shift+C — un raccourci que la plupart des applications
+/// n'utilisent pas, et Windows répond par son bip.
+///
+/// En dernier recours seulement, on force le relâchement — et uniquement des
+/// touches réellement enfoncées : un WM_KEYUP isolé sur Alt est interprété
+/// comme un appui bref sur Alt seul, ce qui active la barre de menus et fait
+/// biper les applications qui n'en ont pas.
+fn wait_for_clean_modifiers(enigo: &mut Enigo) {
+    #[cfg(target_os = "windows")]
+    {
+        const POLL_MS: u64 = 15;
+        const MAX_WAIT_MS: u64 = 700;
+
+        let mut waited = 0;
+        while waited < MAX_WAIT_MS {
+            if !platform::is_key_down(platform::VK_SHIFT)
+                && !platform::is_key_down(platform::VK_CONTROL)
+                && !platform::is_key_down(platform::VK_ALT)
+            {
+                return;
+            }
+            thread::sleep(Duration::from_millis(POLL_MS));
+            waited += POLL_MS;
+        }
+
+        if platform::is_key_down(platform::VK_SHIFT) {
+            enigo.key_up(Key::Shift);
+        }
+        if platform::is_key_down(platform::VK_CONTROL) {
+            enigo.key_up(Key::Control);
+        }
+        if platform::is_key_down(platform::VK_ALT) {
+            enigo.key_up(Key::Alt);
+        }
+        thread::sleep(Duration::from_millis(40));
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        enigo.key_up(Key::Shift);
+        enigo.key_up(Key::Control);
+        enigo.key_up(Key::Alt);
+        thread::sleep(Duration::from_millis(60));
+    }
+}
+
+#[cfg(target_os = "macos")]
+const CMD: Key = Key::Meta;
+
+fn send_copy(enigo: &mut Enigo) {
+    #[cfg(target_os = "macos")]
+    {
+        enigo.key_down(CMD);
+        enigo.key_click(Key::Layout('c'));
+        enigo.key_up(CMD);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        enigo.key_down(Key::Control);
+        enigo.key_click(Key::Layout('c'));
+        enigo.key_up(Key::Control);
+    }
+}
+
+fn send_select_all(enigo: &mut Enigo) {
+    #[cfg(target_os = "macos")]
+    {
+        enigo.key_down(CMD);
+        enigo.key_click(Key::Layout('a'));
+        enigo.key_up(CMD);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        enigo.key_down(Key::Control);
+        enigo.key_click(Key::Layout('a'));
+        enigo.key_up(Key::Control);
+    }
+}
+
+fn send_paste(enigo: &mut Enigo) {
+    #[cfg(target_os = "macos")]
+    {
+        enigo.key_down(CMD);
+        enigo.key_click(Key::Layout('v'));
+        enigo.key_up(CMD);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        enigo.key_down(Key::Control);
+        enigo.key_click(Key::Layout('v'));
+        enigo.key_up(Key::Control);
+    }
+}
+
+/// Copie la sélection courante de l'application active et la retourne.
+///
+/// Retourne `Ok("")` si rien n'était sélectionné.
+pub fn capture_selection(app: &AppHandle) -> Result<String, String> {
+    let previous = crate::clipboard::get_clipboard(app).unwrap_or_default();
+    *SAVED_CLIPBOARD.lock().unwrap() = Some(previous.clone());
+
+    // On vide le presse-papiers pour distinguer "rien n'était sélectionné"
+    // de "l'utilisateur avait déjà ce texte dans son presse-papiers".
+    let _ = crate::clipboard::set_clipboard(app, String::new());
+
+    let mode = crate::config::get(app).capture_mode;
+    let mut enigo = Enigo::new();
+    let mut captured = String::new();
+
+    // La copie d'emblée est une devinette : on envoie Ctrl+C sans savoir s'il y
+    // a une sélection. Quand il n'y en a pas, beaucoup d'applications (dont
+    // Teams) répondent par le bip système. Le mode « tout le champ » s'en passe.
+    if mode != crate::config::CAPTURE_FIELD {
+        wait_for_clean_modifiers(&mut enigo);
+        send_copy(&mut enigo);
+        captured = poll_clipboard(app);
+    }
+
+    // Ctrl+A laisse la sélection active, donc le collage remplacera bien tout
+    // le champ.
+    if captured.is_empty() && mode != crate::config::CAPTURE_SELECTION {
+        wait_for_clean_modifiers(&mut enigo);
+        send_select_all(&mut enigo);
+        thread::sleep(Duration::from_millis(80));
+        wait_for_clean_modifiers(&mut enigo);
+        send_copy(&mut enigo);
+        captured = poll_clipboard(app);
+    }
+
+    // Le presse-papiers a joué son rôle de véhicule, on rend à l'utilisateur
+    // ce qu'il y avait avant.
+    let _ = crate::clipboard::set_clipboard(app, previous);
+
+    Ok(captured)
+}
+
+/// Attend que l'application cible ait honoré le Ctrl+C.
+///
+/// Les applications Electron (Teams, Slack, VS Code) sont nettement plus lentes
+/// que les applications natives : on sonde plutôt que d'attendre un délai fixe
+/// généreux, ce qui rend le cas rapide rapide sans pénaliser le cas lent.
+fn poll_clipboard(app: &AppHandle) -> String {
+    for _ in 0..12 {
+        thread::sleep(Duration::from_millis(40));
+        if let Ok(text) = crate::clipboard::get_clipboard(app) {
+            if !text.is_empty() {
+                return text;
+            }
+        }
+    }
+    String::new()
+}
+
+/// Remet le focus sur l'application d'origine et y colle `text`,
+/// ce qui remplace la sélection encore active.
+pub fn replace_selection(app: &AppHandle, text: String) -> Result<(), String> {
+    let handle = target_window();
+    if !platform::focus_window(handle) {
+        return Err(
+            "Impossible de redonner le focus à l'application d'origine. Le résultat a été copié dans le presse-papiers."
+                .to_string(),
+        );
+    }
+
+    // Laisser à la fenêtre le temps de reprendre le focus clavier.
+    thread::sleep(Duration::from_millis(120));
+
+    crate::clipboard::set_clipboard(app, text)?;
+    thread::sleep(Duration::from_millis(60));
+
+    let mut enigo = Enigo::new();
+    wait_for_clean_modifiers(&mut enigo);
+    send_paste(&mut enigo);
+
+    // Restaurer le presse-papiers trop tôt ferait coller l'ancien contenu.
+    thread::sleep(Duration::from_millis(350));
+    if let Some(previous) = SAVED_CLIPBOARD.lock().unwrap().take() {
+        let _ = crate::clipboard::set_clipboard(app, previous);
+    }
+
+    Ok(())
+}

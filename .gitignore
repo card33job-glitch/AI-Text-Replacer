@@ -1,0 +1,16 @@
+node_modules
+dist
+.DS_Store
+*.local
+target/
+*.pyc
+.env
+.env.local
+
+# Sorties de `tauri dev`
+.tauri-dev.log
+*.log
+
+# Cargo.lock est volontairement versionné : ce dépôt produit une application,
+# pas une bibliothèque. Le verrouiller garantit que la version publiée se
+# recompile à l'identique.
