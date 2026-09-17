@@ -56,7 +56,13 @@ Onglet **Paramètres** :
    - Claude : https://console.anthropic.com
    - OpenAI : https://platform.openai.com/api-keys
    - Modèle local : aucune clé, démarrez simplement Ollama (`ollama serve`)
-4. **Sauvegarder les paramètres**.
+4. **Lancer au démarrage de l'ordinateur** — cochez la case pour que l'application
+   soit là à chaque ouverture de session, sans avoir à y penser.
+5. **Sauvegarder les paramètres**.
+
+> La case de démarrage automatique enregistre le chemin de l'exécutable tel qu'il est
+> au moment de la sauvegarde. Si vous déplacez l'application, relancez-la une fois :
+> l'entrée est corrigée toute seule au lancement.
 
 ## Étape 5 — Tester dans Teams
 

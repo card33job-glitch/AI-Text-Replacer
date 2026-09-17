@@ -51,6 +51,7 @@ pub async fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String
 
     let previous = config::get(&app);
     let shortcuts = config.shortcuts.clone();
+    let start_at_login = config.start_at_login;
     config::save(&app, config)?;
 
     if let Err(e) = crate::shortcuts::register_all(&app, &shortcuts) {
@@ -62,6 +63,15 @@ pub async fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String
         rollback.shortcuts = previous.shortcuts;
         let _ = config::save(&app, rollback);
         return Err(e);
+    }
+
+    if let Err(e) = crate::autostart::sync(start_at_login) {
+        // Le système a refusé : on remet la case dans l'état réel plutôt que de
+        // laisser la configuration promettre un démarrage qui n'aura pas lieu.
+        let mut rollback = config::get(&app);
+        rollback.start_at_login = crate::autostart::is_enabled();
+        let _ = config::save(&app, rollback);
+        return Err(format!("Démarrage automatique : {}", e));
     }
     Ok(())
 }

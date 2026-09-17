@@ -1,5 +1,6 @@
 // Modules partagés entre le binaire et d'éventuels tests d'intégration.
 pub mod ai;
+pub mod autostart;
 pub mod clipboard;
 pub mod commands;
 pub mod config;

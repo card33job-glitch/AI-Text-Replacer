@@ -50,6 +50,7 @@ export interface AppConfig {
   targetLanguage: string
   customInstructions: string
   startMinimized: boolean
+  startAtLogin: boolean
   captureMode: CaptureMode
 }
 

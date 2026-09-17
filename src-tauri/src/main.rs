@@ -4,6 +4,7 @@
 )]
 
 mod ai;
+mod autostart;
 mod clipboard;
 mod commands;
 mod config;
@@ -70,7 +71,16 @@ fn main() {
                 eprintln!("Raccourcis globaux: {}", e);
             }
 
-            if cfg.start_minimized {
+            // Remet l'entrée de démarrage en phase avec la config : elle pointe
+            // peut-être encore vers l'emplacement d'avant une mise à jour.
+            if let Err(e) = autostart::sync(cfg.start_at_login) {
+                eprintln!("Démarrage automatique: {}", e);
+            }
+
+            // Ouvrir une fenêtre à chaque ouverture de session serait une
+            // nuisance : lancée automatiquement, l'application reste dans la
+            // zone de notification, prête à répondre aux raccourcis.
+            if cfg.start_minimized || autostart::launched_at_login() {
                 if let Some(window) = app.get_window("main") {
                     let _ = window.hide();
                 }

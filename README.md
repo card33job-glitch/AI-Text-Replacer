@@ -106,7 +106,13 @@ modifiables ; le champ « Modèle local » vise `http://localhost:11434/v1/chat/
 - **Que capturer au raccourci** : voir le tableau des modes plus haut.
 - **Langue de traduction** et **consignes permanentes** (ex : « vouvoie toujours »),
   ajoutées à chaque demande.
-- **Démarrer réduit** : l'application vit dans la zone de notification.
+- **Lancer au démarrage de l'ordinateur** : l'application s'ouvre à votre session,
+  directement dans la zone de notification. L'entrée est posée pour votre compte
+  seul — clé `HKCU\…\CurrentVersion\Run` sous Windows (visible dans le Gestionnaire
+  des tâches, onglet *Démarrage*), LaunchAgent `~/Library/LaunchAgents/` sous macOS —
+  et elle est réécrite au lancement si l'application a changé d'emplacement.
+- **Démarrer réduit** : l'application vit dans la zone de notification. Un démarrage
+  automatique est réduit de toute façon, quelle que soit cette case.
 
 Configuration et historique sont stockés dans
 `%APPDATA%\com.aitextreplacer.app\` (`config.json`, `history.json`).

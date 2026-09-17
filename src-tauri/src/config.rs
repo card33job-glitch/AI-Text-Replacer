@@ -119,6 +119,10 @@ pub struct AppConfig {
     pub custom_instructions: String,
     #[serde(default)]
     pub start_minimized: bool,
+    /// Lance l'application à l'ouverture de session (clé `Run` sous Windows,
+    /// LaunchAgent sous macOS). Voir `autostart`.
+    #[serde(default)]
+    pub start_at_login: bool,
     /// Ce que le raccourci capture : voir les constantes `CAPTURE_*`.
     /// Vide à la lecture d'une config antérieure, `migrate` s'en charge.
     #[serde(default)]
@@ -161,6 +165,7 @@ impl Default for AppConfig {
             target_language: default_language(),
             custom_instructions: String::new(),
             start_minimized: false,
+            start_at_login: false,
             capture_mode: CAPTURE_FIELD.to_string(),
             legacy_select_all: None,
         }

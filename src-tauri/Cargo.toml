@@ -29,9 +29,17 @@ enigo = "0.1"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser", "processthreadsapi", "windef", "minwindef"] }
+# Clé `Run` de l'utilisateur courant, pour le démarrage automatique.
+winreg = "0.52"
 
 # Versions alignées sur celles que Tauri 1.8 tire déjà via tao, pour éviter
 # deux copies incompatibles de `objc` dans le même binaire.
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.24"
 objc = "0.2"
+
+[features]
+# `tauri build` compile avec `--features custom-protocol` : c'est ce qui fait
+# servir le frontend depuis le binaire au lieu du serveur de développement.
+# Sans cette déclaration, la compilation de production échoue d'entrée.
+custom-protocol = ["tauri/custom-protocol"]

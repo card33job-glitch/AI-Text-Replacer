@@ -229,11 +229,33 @@ export default function SettingsPanel() {
           <label>
             <input
               type="checkbox"
+              checked={config.startAtLogin}
+              onChange={(e) => patch({ startAtLogin: e.target.checked })}
+            />
+            <span>Lancer au démarrage de l'ordinateur</span>
+          </label>
+          <p className="help-text">
+            L'application démarre à l'ouverture de votre session, directement dans la
+            zone de notification : les raccourcis sont actifs sans rien avoir à ouvrir.
+            {IS_MAC
+              ? " L'entrée est posée dans ~/Library/LaunchAgents, pour votre compte uniquement."
+              : ' L\'entrée apparaît dans le Gestionnaire des tâches, onglet « Démarrage », pour votre compte uniquement.'}
+          </p>
+        </div>
+
+        <div className="checkbox-group">
+          <label>
+            <input
+              type="checkbox"
               checked={config.startMinimized}
               onChange={(e) => patch({ startMinimized: e.target.checked })}
             />
             <span>Démarrer réduit dans la zone de notification</span>
           </label>
+          <p className="help-text">
+            S'applique aussi quand vous lancez l'application vous-même. Un démarrage
+            automatique est de toute façon toujours réduit.
+          </p>
         </div>
 
         <label htmlFor="target-language">Langue de traduction :</label>
