@@ -110,6 +110,67 @@
   margin: 0;
 }
 
+/* Ligne de titre d'un texte figé : le nom prend la place, le bouton garde la
+   sienne. */
+.snippet-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.api-header input[type="text"] {
+  margin-bottom: 0;
+}
+
+.remove-btn,
+.add-btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.remove-btn {
+  border: 1px solid #f5bcbc;
+  background: #fdecec;
+  color: #9b1c1c;
+  flex-shrink: 0;
+}
+
+.remove-btn:hover {
+  background: #f9d6d6;
+}
+
+.add-btn {
+  border: 1px dashed #b9c6d4;
+  background: #f5f7fa;
+  color: #34506b;
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.add-btn:hover {
+  background: #eaf1f8;
+  border-color: #007acc;
+}
+
+/* Le même bouton, glissé au fil d'une phrase plutôt qu'en pleine largeur. */
+.add-btn.inline {
+  width: auto;
+  padding: 3px 10px;
+  margin-left: 4px;
+  font-size: 12px;
+  vertical-align: baseline;
+}
+
+.section input[type="range"] {
+  width: 100%;
+  margin-bottom: 12px;
+  accent-color: #007acc;
+}
+
 .save-btn {
   width: 100%;
   padding: 12px;
@@ -187,6 +248,7 @@
   color: #6b5416;
 }
 
+.help-text kbd,
 .warning-text kbd {
   padding: 1px 5px;
   border: 1px solid #d8c286;

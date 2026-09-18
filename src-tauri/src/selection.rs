@@ -25,15 +25,72 @@ lazy_static! {
 mod platform {
     use std::ptr::null_mut;
     use winapi::shared::windef::{HWND, POINT};
-    use winapi::um::processthreadsapi::GetCurrentThreadId;
+    use winapi::um::handleapi::CloseHandle;
+    use winapi::um::processthreadsapi::{GetCurrentThreadId, OpenProcess};
+    use winapi::um::sysinfoapi::GetTickCount;
+    // Contrairement à `OpenProcess`, cette fonction-ci vit dans `winbase`.
+    use winapi::um::winbase::QueryFullProcessImageNameW;
+    use winapi::um::winnt::PROCESS_QUERY_LIMITED_INFORMATION;
     use winapi::um::winuser::{
         AttachThreadInput, BringWindowToTop, ClientToScreen, GetAsyncKeyState, GetCursorPos,
-        GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId, IsIconic,
-        SetForegroundWindow, ShowWindow, GUITHREADINFO, SW_RESTORE,
+        GetForegroundWindow, GetGUIThreadInfo, GetLastInputInfo, GetWindowThreadProcessId,
+        IsIconic, SetForegroundWindow, ShowWindow, GUITHREADINFO, LASTINPUTINFO, SW_RESTORE,
     };
 
     pub fn foreground_window() -> isize {
         unsafe { GetForegroundWindow() as isize }
+    }
+
+    /// Nom de l'exécutable de l'application au premier plan ("ms-teams.exe").
+    ///
+    /// Le nom de fichier, pas le chemin : c'est ce qu'un utilisateur reconnaît
+    /// et peut saisir dans les Paramètres, et il ne change pas d'une
+    /// installation à l'autre.
+    pub fn foreground_app() -> Option<String> {
+        unsafe {
+            let hwnd = GetForegroundWindow();
+            if hwnd.is_null() {
+                return None;
+            }
+            let mut pid: u32 = 0;
+            GetWindowThreadProcessId(hwnd, &mut pid);
+            if pid == 0 {
+                return None;
+            }
+            // LIMITED_INFORMATION suffit pour lire le chemin de l'image et
+            // reste accordé pour des processus d'intégrité plus élevée, là où
+            // PROCESS_QUERY_INFORMATION serait refusé.
+            let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if process.is_null() {
+                return None;
+            }
+            let mut buffer = [0u16; 512];
+            let mut size = buffer.len() as u32;
+            let ok = QueryFullProcessImageNameW(process, 0, buffer.as_mut_ptr(), &mut size);
+            CloseHandle(process);
+            if ok == 0 {
+                return None;
+            }
+            let path = String::from_utf16_lossy(&buffer[..size as usize]);
+            path.rsplit('\\').next().map(|name| name.to_string())
+        }
+    }
+
+    /// Millisecondes écoulées depuis la dernière entrée clavier ou souris.
+    ///
+    /// Compte aussi les frappes que nous simulons : l'appelant en tient compte
+    /// en prenant sa mesure de référence *après* sa propre simulation.
+    pub fn idle_millis() -> u64 {
+        unsafe {
+            let mut info: LASTINPUTINFO = std::mem::zeroed();
+            info.cbSize = std::mem::size_of::<LASTINPUTINFO>() as u32;
+            if GetLastInputInfo(&mut info) == 0 {
+                return 0;
+            }
+            // Les deux compteurs débordent après 49 jours, mais leur différence
+            // reste juste : `wrapping_sub` évite la panique en mode debug.
+            GetTickCount().wrapping_sub(info.dwTime) as u64
+        }
     }
 
     /// Redonne le focus à une fenêtre.
@@ -150,6 +207,59 @@ mod platform {
         }
     }
 
+    /// Nom affiché de l'application au premier plan ("Mail", "Microsoft Teams").
+    ///
+    /// macOS n'a pas d'équivalent direct du nom d'exécutable Windows ; le nom
+    /// localisé est ce que l'utilisateur lit dans le Dock, donc ce qu'il saura
+    /// écrire dans les Paramètres.
+    pub fn foreground_app() -> Option<String> {
+        unsafe {
+            let workspace: id = msg_send![class!(NSWorkspace), sharedWorkspace];
+            if workspace == nil {
+                return None;
+            }
+            let app: id = msg_send![workspace, frontmostApplication];
+            if app == nil {
+                return None;
+            }
+            let name: id = msg_send![app, localizedName];
+            if name == nil {
+                return None;
+            }
+            let utf8: *const std::os::raw::c_char = msg_send![name, UTF8String];
+            if utf8.is_null() {
+                return None;
+            }
+            std::ffi::CStr::from_ptr(utf8)
+                .to_str()
+                .ok()
+                .map(|s| s.to_string())
+        }
+    }
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGEventSourceSecondsSinceLastEventType(state: i32, event_type: u32) -> f64;
+    }
+
+    /// Millisecondes écoulées depuis la dernière entrée clavier ou souris.
+    pub fn idle_millis() -> u64 {
+        // kCGEventSourceStateCombinedSessionState, kCGAnyInputEventType
+        const COMBINED_SESSION_STATE: i32 = 0;
+        const ANY_INPUT_EVENT: u32 = u32::MAX;
+        unsafe {
+            let seconds = CGEventSourceSecondsSinceLastEventType(
+                COMBINED_SESSION_STATE,
+                ANY_INPUT_EVENT,
+            );
+            if seconds.is_finite() && seconds > 0.0 {
+                (seconds * 1000.0) as u64
+            } else {
+                0
+            }
+        }
+    }
+
     pub fn focus_window(target: isize) -> bool {
         if target == 0 {
             return false;
@@ -211,6 +321,12 @@ mod platform {
     pub fn foreground_window() -> isize {
         0
     }
+    pub fn foreground_app() -> Option<String> {
+        None
+    }
+    pub fn idle_millis() -> u64 {
+        0
+    }
     pub fn focus_window(_handle: isize) -> bool {
         false
     }
@@ -225,7 +341,7 @@ mod platform {
     }
 }
 
-pub use platform::{caret_position, cursor_position};
+pub use platform::{caret_position, cursor_position, foreground_app, foreground_window, idle_millis};
 
 /// Mémorise la fenêtre actuellement au premier plan comme cible du remplacement.
 pub fn remember_target_window() {
@@ -340,6 +456,16 @@ fn send_paste(enigo: &mut Enigo) {
 ///
 /// Retourne `Ok("")` si rien n'était sélectionné.
 pub fn capture_selection(app: &AppHandle) -> Result<String, String> {
+    let mode = crate::config::get(app).capture_mode;
+    capture_with_mode(app, &mode)
+}
+
+/// Même capture, mais avec un mode imposé par l'appelant.
+///
+/// Le contrôle spontané n'a pas de sélection à lire — l'utilisateur tape, il ne
+/// sélectionne rien — donc il lui faut tout le champ quel que soit le mode
+/// choisi dans les Paramètres pour les raccourcis.
+pub fn capture_with_mode(app: &AppHandle, mode: &str) -> Result<String, String> {
     let previous = crate::clipboard::get_clipboard(app).unwrap_or_default();
     *SAVED_CLIPBOARD.lock().unwrap() = Some(previous.clone());
 
@@ -347,7 +473,6 @@ pub fn capture_selection(app: &AppHandle) -> Result<String, String> {
     // de "l'utilisateur avait déjà ce texte dans son presse-papiers".
     let _ = crate::clipboard::set_clipboard(app, String::new());
 
-    let mode = crate::config::get(app).capture_mode;
     let mut enigo = Enigo::new();
     let mut captured = String::new();
 
@@ -378,6 +503,18 @@ pub fn capture_selection(app: &AppHandle) -> Result<String, String> {
     Ok(captured)
 }
 
+/// Replie la sélection laissée par un `Ctrl+A` dont on ne fera rien.
+///
+/// **Indispensable après toute capture non suivie d'un collage.** `Ctrl+A`
+/// laisse le champ entièrement sélectionné : la frappe suivante de
+/// l'utilisateur effacerait tout ce qu'il a écrit. La flèche droite replie la
+/// sélection sur sa fin, et le point d'insertion se retrouve à la fin du champ.
+pub fn collapse_selection() {
+    let mut enigo = Enigo::new();
+    wait_for_clean_modifiers(&mut enigo);
+    enigo.key_click(Key::RightArrow);
+}
+
 /// Attend que l'application cible ait honoré le Ctrl+C.
 ///
 /// Les applications Electron (Teams, Slack, VS Code) sont nettement plus lentes
@@ -393,6 +530,22 @@ fn poll_clipboard(app: &AppHandle) -> String {
         }
     }
     String::new()
+}
+
+/// Colle un texte au point d'insertion de l'application d'origine, sans rien
+/// capturer au préalable.
+///
+/// Sert aux textes figés : il n'y a pas de sélection à lire, seulement un
+/// contenu à déposer. S'il se trouve qu'une sélection est active, elle est
+/// remplacée — c'est le comportement normal d'un collage, et celui qu'attend
+/// quelqu'un qui sélectionne avant d'insérer.
+pub fn insert_text(app: &AppHandle, text: String) -> Result<(), String> {
+    // `replace_selection` restaure ce que `capture_selection` avait mis de côté.
+    // Ici personne n'a capturé : c'est à nous de sauvegarder le presse-papiers,
+    // sinon le texte figé y resterait à la place du contenu de l'utilisateur.
+    let previous = crate::clipboard::get_clipboard(app).unwrap_or_default();
+    *SAVED_CLIPBOARD.lock().unwrap() = Some(previous);
+    replace_selection(app, text)
 }
 
 /// Remet le focus sur l'application d'origine et y colle `text`,

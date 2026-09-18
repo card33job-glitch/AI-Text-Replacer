@@ -18,6 +18,14 @@ export interface ShortcutBinding {
 
 export const MENU_ACTION = 'menu'
 
+/** Un texte figé inséré tel quel par sa combinaison de touches. */
+export interface Snippet {
+  id: string
+  label: string
+  accelerator: string
+  text: string
+}
+
 /** Les trois liaisons proposées dans les Paramètres, dans cet ordre. */
 export const SHORTCUT_SLOTS: { action: string; label: string; help: string }[] = [
   {
@@ -42,8 +50,22 @@ export const SHORTCUT_SLOTS: { action: string; label: string; help: string }[] =
   },
 ]
 
+/** Contrôle grammatical spontané — voir src-tauri/src/proactive.rs. */
+export interface ProactiveConfig {
+  enabled: boolean
+  /** Nom d'exécutable sous Windows, nom affiché sous macOS. */
+  apps: string[]
+  idleSeconds: number
+  minChars: number
+}
+
+export const IDLE_SECONDS_MIN = 1
+export const IDLE_SECONDS_MAX = 300
+
 export interface AppConfig {
   shortcuts: ShortcutBinding[]
+  snippets: Snippet[]
+  proactive: ProactiveConfig
   defaultProvider: ProviderId
   providers: Record<string, ProviderConfig>
   previewBeforeReplace: boolean

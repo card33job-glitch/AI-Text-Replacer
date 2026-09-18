@@ -10,6 +10,7 @@ mod commands;
 mod config;
 mod permissions;
 mod popup;
+mod proactive;
 mod selection;
 mod shortcuts;
 mod toast;
@@ -67,9 +68,13 @@ fn main() {
             let handle = app.handle();
             let cfg = config::get(&handle);
 
-            if let Err(e) = shortcuts::register_all(&handle, &cfg.shortcuts) {
+            if let Err(e) = shortcuts::register_all(&handle, &cfg.shortcuts, &cfg.snippets) {
                 eprintln!("Raccourcis globaux: {}", e);
             }
+
+            // L'observateur tourne en permanence : même mode proactif éteint,
+            // il retient la dernière application active pour les Paramètres.
+            proactive::start(handle.clone());
 
             // Remet l'entrée de démarrage en phase avec la config : elle pointe
             // peut-être encore vers l'emplacement d'avant une mise à jour.
@@ -100,6 +105,7 @@ fn main() {
             commands::hide_popup,
             commands::open_main_window,
             commands::accessibility_status,
+            commands::last_foreground_app,
             commands::get_history,
             commands::clear_history,
         ])

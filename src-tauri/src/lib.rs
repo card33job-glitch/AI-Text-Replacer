@@ -6,6 +6,7 @@ pub mod commands;
 pub mod config;
 pub mod permissions;
 pub mod popup;
+pub mod proactive;
 pub mod selection;
 pub mod shortcuts;
 pub mod toast;

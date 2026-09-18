@@ -28,7 +28,7 @@ lazy_static = "1.4"
 enigo = "0.1"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winuser", "processthreadsapi", "windef", "minwindef"] }
+winapi = { version = "0.3", features = ["winuser", "processthreadsapi", "windef", "minwindef", "handleapi", "winnt", "sysinfoapi", "winbase"] }
 # Clé `Run` de l'utilisateur courant, pour le démarrage automatique.
 winreg = "0.52"
 

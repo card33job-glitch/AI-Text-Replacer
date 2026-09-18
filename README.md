@@ -26,6 +26,41 @@ est affiché. La popup ne s'ouvre qu'en cas d'erreur, ou si rien n'a pu être ca
 Une pression pendant qu'une transformation tourne est ignorée, pour éviter de
 retransformer un texte déjà remplacé.
 
+### Textes figés
+
+En plus des actions, vous pouvez associer une combinaison à un **texte fixe** — une
+signature, une adresse, une formule qui revient sans cesse. Il est inséré tel quel au
+point d'insertion. Aucun appel au modèle : c'est instantané et gratuit. Les textes figés
+et les actions partagent le même espace de combinaisons, et un doublon est refusé à la
+sauvegarde.
+
+### Correction automatique
+
+Optionnelle, désactivée par défaut. Dans les applications que vous listez, une pause
+dans votre frappe déclenche une relecture, et le texte corrigé remplace le vôtre sans
+confirmation.
+
+| Réglage | Rôle |
+|---|---|
+| **Applications surveillées** | `ms-teams.exe`, `outlook.exe`… (nom affiché sous macOS). Liste vide = rien ne se déclenche |
+| **Délai** | Secondes sans frappe ni clic avant la relecture. 8 s par défaut |
+| **Longueur minimale** | En dessous, aucun appel au modèle. 25 caractères par défaut |
+
+> ⚠️ Une application ne peut pas lire le champ d'une autre : la relecture envoie
+> `Ctrl+A` + `Ctrl+C`, donc **votre champ est entièrement sélectionné pendant un
+> instant**, et le point d'insertion se retrouve à la fin du champ. C'est la raison
+> d'être du délai — on ne relit que quelqu'un qui s'est arrêté d'écrire.
+
+Le remplacement est abandonné, et la sélection repliée, si entre la lecture et le
+collage vous avez **repris la frappe** ou **changé d'application** : coller à ce
+moment-là écraserait ce que vous venez d'écrire, ou déposerait votre texte ailleurs.
+Rien n'est collé non plus quand le modèle ne change rien. Une erreur d'API reste
+silencieuse — vous n'avez rien demandé, une popup au milieu de votre frappe serait une
+intrusion.
+
+**Chaque relecture est un appel facturé** à votre fournisseur. La longueur minimale et
+le délai sont les deux garde-fous ; un même texte n'est jamais soumis deux fois.
+
 ### Ce qui est capturé
 
 Une application ne peut pas lire la sélection d'une autre : il faut lui envoyer `Ctrl+C`.
@@ -100,12 +135,17 @@ modifiables ; le champ « Modèle local » vise `http://localhost:11434/v1/chat/
   est appliquée immédiatement, sans redémarrage. Si elle est déjà prise par une autre
   application, les anciennes sont restaurées et l'erreur est affichée. Deux actions ne
   peuvent pas partager la même combinaison.
+- **Textes figés** : nom, combinaison, contenu. Ajoutez-en autant que vous voulez.
+  Un texte sans combinaison est conservé mais inactif ; une combinaison sans texte est
+  refusée à la sauvegarde. `Retour arrière` dans le champ de combinaison la libère.
 - **Aperçu avant remplacement** : concerne uniquement le menu au curseur — il affiche le
   résultat avec un bouton *Remplacer* au lieu de coller directement. Les raccourcis
   directs remplacent toujours sans aperçu, c'est leur raison d'être.
 - **Que capturer au raccourci** : voir le tableau des modes plus haut.
 - **Langue de traduction** et **consignes permanentes** (ex : « vouvoie toujours »),
   ajoutées à chaque demande.
+- **Correction automatique** : voir la section dédiée plus haut. Activer sans lister
+  d'application est refusé à la sauvegarde, la case n'aurait aucun effet.
 - **Lancer au démarrage de l'ordinateur** : l'application s'ouvre à votre session,
   directement dans la zone de notification. L'entrée est posée pour votre compte
   seul — clé `HKCU\…\CurrentVersion\Run` sous Windows (visible dans le Gestionnaire
@@ -123,7 +163,8 @@ Configuration et historique sont stockés dans
 ## Stack
 
 - **Backend** : Rust + Tauri 1.5 — `enigo` pour la simulation clavier, `winapi` pour le
-  focus et les modificateurs sous Windows, `cocoa`/`objc` pour leurs équivalents macOS
+  focus, les modificateurs, le processus au premier plan et le temps d'inactivité sous
+  Windows, `cocoa`/`objc` et `CGEventSource` pour leurs équivalents macOS
 - **CI** : GitHub Actions compile les deux plateformes à chaque poussée
 - **Frontend** : React + TypeScript + Vite
 - Deux fenêtres partagent le même bundle : la principale et la popup

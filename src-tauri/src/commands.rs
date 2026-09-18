@@ -42,25 +42,63 @@ pub async fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String
         ));
     }
 
-    if let Some(duplicate) = crate::shortcuts::find_duplicate(&config.shortcuts) {
+    if let Some(duplicate) = crate::shortcuts::find_duplicate(&config.shortcuts, &config.snippets) {
         return Err(format!(
-            "« {} » est affecté à deux actions. Chaque raccourci doit être unique.",
+            "« {} » est affecté à deux déclencheurs. Chaque raccourci doit être unique.",
             duplicate
         ));
     }
 
+    // Une combinaison sans texte n'insérerait rien : autant le dire au moment
+    // de la sauvegarde plutôt qu'au premier appui resté sans effet.
+    if let Some(snippet) = config
+        .snippets
+        .iter()
+        .find(|s| !s.accelerator.trim().is_empty() && s.text.is_empty())
+    {
+        return Err(format!(
+            "Le texte figé « {} » a un raccourci mais aucun contenu à insérer.",
+            if snippet.label.trim().is_empty() {
+                &snippet.accelerator
+            } else {
+                &snippet.label
+            }
+        ));
+    }
+
+    if config.proactive.enabled {
+        // Sans application listée, le mode ne se déclencherait jamais : mieux
+        // vaut le dire que de laisser une case cochée sans effet.
+        if config.proactive.apps.iter().all(|a| a.trim().is_empty()) {
+            return Err(
+                "Le contrôle automatique demande au moins une application à surveiller."
+                    .to_string(),
+            );
+        }
+        let idle = config.proactive.idle_seconds;
+        if !(config::IDLE_SECONDS_MIN..=config::IDLE_SECONDS_MAX).contains(&idle) {
+            return Err(format!(
+                "Le délai doit être compris entre {} et {} secondes.",
+                config::IDLE_SECONDS_MIN,
+                config::IDLE_SECONDS_MAX
+            ));
+        }
+    }
+
     let previous = config::get(&app);
     let shortcuts = config.shortcuts.clone();
+    let snippets = config.snippets.clone();
     let start_at_login = config.start_at_login;
     config::save(&app, config)?;
 
-    if let Err(e) = crate::shortcuts::register_all(&app, &shortcuts) {
+    if let Err(e) = crate::shortcuts::register_all(&app, &shortcuts, &snippets) {
         // Une combinaison est refusée (déjà prise par une autre application) :
         // on remet les précédentes pour ne pas laisser l'utilisateur sans
         // aucun raccourci actif.
-        let _ = crate::shortcuts::register_all(&app, &previous.shortcuts);
+        let _ = crate::shortcuts::register_all(&app, &previous.shortcuts, &previous.snippets);
         let mut rollback = config::get(&app);
         rollback.shortcuts = previous.shortcuts;
+        rollback.snippets = previous.snippets;
         let _ = config::save(&app, rollback);
         return Err(e);
     }
@@ -239,6 +277,13 @@ pub async fn open_main_window(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn accessibility_status() -> Result<crate::permissions::AccessibilityStatus, String> {
     Ok(crate::permissions::status())
+}
+
+/// Dernière application active hors la nôtre, pour que les Paramètres puissent
+/// proposer un nom à surveiller au lieu de le faire deviner.
+#[tauri::command]
+pub async fn last_foreground_app() -> Result<Option<String>, String> {
+    Ok(crate::proactive::last_foreground_app())
 }
 
 #[tauri::command]

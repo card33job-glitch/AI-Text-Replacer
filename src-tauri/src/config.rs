@@ -65,6 +65,23 @@ pub struct ShortcutBinding {
 
 pub const MENU_ACTION: &str = "menu";
 
+/// Un texte figé, inséré tel quel au point d'insertion par sa combinaison de
+/// touches. Aucun appel au modèle : c'est de la frappe automatique, pas de la
+/// transformation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Snippet {
+    /// Identifiant stable, pour que l'interface suive une ligne même quand son
+    /// libellé change ou qu'une autre est supprimée au-dessus.
+    pub id: String,
+    /// Ce que l'utilisateur lit dans les Paramètres ; sans effet sur l'insertion.
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub accelerator: String,
+    pub text: String,
+}
+
 /// Modificateur par défaut : un utilisateur macOS attend Cmd là où un
 /// utilisateur Windows attend Ctrl.
 #[cfg(target_os = "macos")]
@@ -103,6 +120,9 @@ pub struct AppConfig {
     /// migrer les configurations écrites avant l'ajout des raccourcis directs.
     #[serde(default, rename = "shortcut", skip_serializing)]
     pub legacy_shortcut: Option<String>,
+    /// Textes figés et leur combinaison de touches. Voir `Snippet`.
+    #[serde(default)]
+    pub snippets: Vec<Snippet>,
     /// Fournisseur utilisé par défaut par la popup.
     #[serde(default = "default_provider")]
     pub default_provider: String,
@@ -123,6 +143,9 @@ pub struct AppConfig {
     /// LaunchAgent sous macOS). Voir `autostart`.
     #[serde(default)]
     pub start_at_login: bool,
+    /// Contrôle grammatical spontané dans les applications surveillées.
+    #[serde(default)]
+    pub proactive: ProactiveConfig,
     /// Ce que le raccourci capture : voir les constantes `CAPTURE_*`.
     /// Vide à la lecture d'une config antérieure, `migrate` s'en charge.
     #[serde(default)]
@@ -131,6 +154,51 @@ pub struct AppConfig {
     #[serde(default, rename = "selectAllIfEmpty", skip_serializing)]
     pub legacy_select_all: Option<bool>,
 }
+
+fn default_idle_seconds() -> u64 {
+    8
+}
+
+fn default_min_chars() -> usize {
+    25
+}
+
+/// Contrôle grammatical spontané : voir le module `proactive`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProactiveConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    /// Applications surveillées. Nom d'exécutable sous Windows
+    /// ("ms-teams.exe"), nom affiché sous macOS ("Microsoft Teams").
+    /// Vide = aucune surveillance : ce mode ne s'active jamais partout.
+    #[serde(default)]
+    pub apps: Vec<String>,
+    /// Secondes sans frappe ni clic avant le contrôle.
+    #[serde(default = "default_idle_seconds")]
+    pub idle_seconds: u64,
+    /// En dessous de cette longueur, on ne dérange pas le modèle : une adresse
+    /// ou un « ok » n'ont pas de grammaire à corriger, et chaque contrôle est
+    /// un appel facturé.
+    #[serde(default = "default_min_chars")]
+    pub min_chars: usize,
+}
+
+impl Default for ProactiveConfig {
+    fn default() -> Self {
+        ProactiveConfig {
+            enabled: false,
+            apps: Vec::new(),
+            idle_seconds: default_idle_seconds(),
+            min_chars: default_min_chars(),
+        }
+    }
+}
+
+/// Bornes du délai. En dessous d'une seconde le contrôle partirait au milieu
+/// d'une phrase ; au-delà de cinq minutes il ne partirait jamais.
+pub const IDLE_SECONDS_MIN: u64 = 1;
+pub const IDLE_SECONDS_MAX: u64 = 300;
 
 /// Toujours tout le champ de saisie : un seul Ctrl+A puis Ctrl+C.
 /// C'est le seul mode qui n'envoie jamais de copie « à vide », donc le seul
@@ -159,6 +227,7 @@ impl Default for AppConfig {
         AppConfig {
             shortcuts: default_shortcuts(),
             legacy_shortcut: None,
+            snippets: Vec::new(),
             default_provider: default_provider(),
             providers,
             preview_before_replace: false,
@@ -166,6 +235,7 @@ impl Default for AppConfig {
             custom_instructions: String::new(),
             start_minimized: false,
             start_at_login: false,
+            proactive: ProactiveConfig::default(),
             capture_mode: CAPTURE_FIELD.to_string(),
             legacy_select_all: None,
         }

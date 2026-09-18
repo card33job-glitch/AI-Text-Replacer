@@ -74,6 +74,23 @@ pub fn show_done(app: &AppHandle, label: &str) {
     schedule_hide(app, generation, VISIBLE_MS);
 }
 
+/// Témoin ponctuel, sans phase d'analyse préalable.
+///
+/// Une insertion de texte figé est instantanée : il n'y a pas d'appel au modèle
+/// à annoncer, donc pas de « Analyse… » pour avoir posé le témoin au bon endroit.
+/// Celui-ci se positionne donc lui-même.
+pub fn show_flash(app: &AppHandle, label: &str) {
+    let generation = emit(
+        app,
+        ToastState {
+            phase: "done",
+            label: label.to_string(),
+        },
+        true,
+    );
+    schedule_hide(app, generation, VISIBLE_MS);
+}
+
 /// Referme le témoin immédiatement (erreur : c'est la popup qui prend le relais).
 pub fn hide(app: &AppHandle) {
     GENERATION.fetch_add(1, Ordering::SeqCst);
