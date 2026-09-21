@@ -16,7 +16,9 @@ use tauri::{AppHandle, LogicalSize, Manager, PhysicalPosition, PhysicalSize, Win
 pub const TOAST_LABEL: &str = "toast";
 const TOAST_WIDTH: f64 = 168.0;
 const TOAST_HEIGHT: f64 = 34.0;
-const VISIBLE_MS: u64 = 1400;
+/// Durée d'affichage de « Corrigé ✓ ». Le texte est déjà remplacé quand ce
+/// libellé apparaît : il confirme, il n'informe pas, et rien ne l'attend.
+const VISIBLE_MS: u64 = 400;
 /// Filet de sécurité : si un appel au modèle n'aboutit jamais, le témoin
 /// « Analyse… » ne doit pas rester à l'écran indéfiniment.
 const STALE_MS: u64 = 45_000;

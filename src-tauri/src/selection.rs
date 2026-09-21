@@ -521,8 +521,14 @@ pub fn collapse_selection() {
 /// que les applications natives : on sonde plutôt que d'attendre un délai fixe
 /// généreux, ce qui rend le cas rapide rapide sans pénaliser le cas lent.
 fn poll_clipboard(app: &AppHandle) -> String {
-    for _ in 0..12 {
-        thread::sleep(Duration::from_millis(40));
+    // Pas fixe et court : une application native répond en quelques
+    // millisecondes, et l'ancien pas de 40 ms lui faisait payer le tarif de la
+    // plus lente. Le budget total est inchangé.
+    const STEP_MS: u64 = 12;
+    const STEPS: u32 = 40;
+
+    for _ in 0..STEPS {
+        thread::sleep(Duration::from_millis(STEP_MS));
         if let Ok(text) = crate::clipboard::get_clipboard(app) {
             if !text.is_empty() {
                 return text;
@@ -552,6 +558,10 @@ pub fn insert_text(app: &AppHandle, text: String) -> Result<(), String> {
 /// ce qui remplace la sélection encore active.
 pub fn replace_selection(app: &AppHandle, text: String) -> Result<(), String> {
     let handle = target_window();
+    // Le cas courant : déclenché au clavier ou par le contrôle spontané, la
+    // fenêtre cible n'a jamais perdu le focus. Il n'y a alors rien à attendre.
+    let already_focused = platform::foreground_window() == handle && handle != 0;
+
     if !platform::focus_window(handle) {
         return Err(
             "Impossible de redonner le focus à l'application d'origine. Le résultat a été copié dans le presse-papiers."
@@ -559,8 +569,11 @@ pub fn replace_selection(app: &AppHandle, text: String) -> Result<(), String> {
         );
     }
 
-    // Laisser à la fenêtre le temps de reprendre le focus clavier.
-    thread::sleep(Duration::from_millis(120));
+    // Laisser à la fenêtre le temps de reprendre le focus clavier — seulement
+    // s'il a fallu le lui rendre.
+    if !already_focused {
+        thread::sleep(Duration::from_millis(120));
+    }
 
     crate::clipboard::set_clipboard(app, text)?;
     thread::sleep(Duration::from_millis(60));
