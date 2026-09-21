@@ -22,6 +22,17 @@
 //! le collage l'utilisateur s'est remis à taper ou a changé d'application :
 //! coller à ce moment-là écraserait ce qu'il vient d'écrire, ou déposerait son
 //! texte dans une autre fenêtre.
+//!
+//! # Deux invariants à ne pas casser
+//!
+//! 1. **Tout ce qui est comparé ou retenu passe par `normalize_text`.** Windows
+//!    livre du CRLF, les modèles répondent en LF. Comparer les formes brutes
+//!    fait passer un texte inchangé pour une correction, et empêche de
+//!    reconnaître un texte qu'on vient soi-même d'écrire.
+//! 2. **`run_check` retient le texte vu, y compris quand elle échoue.** Le seul
+//!    garde-fou contre la répétition est cette mémoire : ne rien retenir, c'est
+//!    resoumettre le même texte à chaque pause, donc un appel facturé toutes
+//!    les quelques secondes sans que rien ne bouge à l'écran.
 
 use crate::config::{self, AppConfig, HistoryEntry};
 use lazy_static::lazy_static;
@@ -124,11 +135,15 @@ pub fn start(app: AppHandle) {
     });
 }
 
-/// Un tour complet de contrôle. Retourne le texte à retenir comme « déjà vu »,
-/// ou `None` s'il n'y a rien à retenir.
+/// Un tour complet de contrôle. Retourne, sous forme normalisée, le texte à
+/// retenir comme « déjà vu » — y compris en cas d'échec, pour ne pas le
+/// resoumettre à la pause suivante. `None` seulement si la lecture elle-même
+/// n'a rien donné.
 ///
 /// Chaque retour anticipé replie la sélection : voir l'avertissement en tête de
 /// module.
+///
+/// `last_seen` est déjà normalisé : il vient d'un retour précédent.
 fn run_check(app: &AppHandle, cfg: &AppConfig, last_seen: &str) -> Option<String> {
     crate::selection::remember_target_window();
     let target = crate::selection::target_window();
@@ -138,12 +153,14 @@ fn run_check(app: &AppHandle, cfg: &AppConfig, last_seen: &str) -> Option<String
     // entrée utilisateur pour le système.
     let since_capture = Instant::now();
 
-    let trimmed = text.trim();
-    if trimmed.chars().count() < cfg.proactive.min_chars || trimmed == last_seen.trim() {
+    // Tout ce qui est comparé ou retenu l'est sous forme normalisée : c'est la
+    // seule façon de reconnaître un texte qu'on vient soi-même d'écrire.
+    let normalized = normalize_text(&text);
+    if normalized.chars().count() < cfg.proactive.min_chars || normalized == last_seen {
         crate::selection::collapse_selection();
         // Un champ trop court reste retenu : tant qu'il ne change pas, inutile
         // d'y revenir.
-        return Some(text);
+        return Some(normalized);
     }
 
     crate::toast::show_analyzing(app);
@@ -155,25 +172,27 @@ fn run_check(app: &AppHandle, cfg: &AppConfig, last_seen: &str) -> Option<String
             Err(e) => {
                 // Silence : l'utilisateur n'a rien demandé, une popup d'erreur
                 // au milieu de sa frappe serait une intrusion. La trace suffit.
-                eprintln!("Contrôle spontané: {}", e);
+                log(app, &format!("echec du modele: {}", e));
                 crate::toast::hide(app);
                 crate::selection::collapse_selection();
-                return Some(text);
+                // Retenu quand même : sans ça, une clé invalide relancerait un
+                // appel à chaque pause, indéfiniment.
+                return Some(normalized);
             }
         };
 
-    if corrected.trim() == trimmed {
+    if normalize_text(&corrected) == normalized {
         // Rien à corriger : ne pas coller un texte identique, qui ferait
         // clignoter le champ et le marquerait modifié pour rien.
         crate::toast::hide(app);
         crate::selection::collapse_selection();
-        return Some(text);
+        return Some(normalized);
     }
 
     if user_moved_on(target, since_capture) {
         crate::toast::hide(app);
         crate::selection::collapse_selection();
-        return Some(text);
+        return Some(normalized);
     }
 
     let _ = config::push_history(
@@ -191,15 +210,45 @@ fn run_check(app: &AppHandle, cfg: &AppConfig, last_seen: &str) -> Option<String
     match crate::selection::replace_selection(app, corrected.clone()) {
         Ok(()) => {
             crate::toast::show_done(app, "Corrigé");
+            log(app, "corrige");
             // C'est le texte corrigé qui est maintenant dans le champ : le
-            // retenir évite de le soumettre à nouveau à la pause suivante.
-            Some(corrected)
+            // retenir sous la même forme normalisée que celle qu'on relira
+            // évite de le resoumettre à la pause suivante.
+            Some(normalize_text(&corrected))
         }
         Err(e) => {
-            eprintln!("Contrôle spontané: {}", e);
+            log(app, &format!("echec du collage: {}", e));
             crate::toast::hide(app);
-            None
+            // Retenir malgré l'échec : autrement la pause suivante retenterait
+            // le même texte, et la suivante encore.
+            Some(normalized)
         }
+    }
+}
+
+/// Trace des contrôles spontanés, bornée à quelques milliers de lignes.
+///
+/// Ce mode est silencieux par conception — l'utilisateur n'a rien demandé, une
+/// popup d'erreur en pleine frappe serait une intrusion. Sans trace écrite, il
+/// serait donc impossible de comprendre pourquoi il ne s'est rien passé : en
+/// version de production il n'y a pas de console où lire un `eprintln`.
+fn log(app: &AppHandle, message: &str) {
+    const MAX_BYTES: u64 = 256 * 1024;
+
+    let path = match app.path_resolver().app_config_dir() {
+        Some(dir) => dir.join("proactive.log"),
+        None => return,
+    };
+    if std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0) > MAX_BYTES {
+        let _ = std::fs::remove_file(&path);
+    }
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        use std::io::Write;
+        let _ = writeln!(file, "{} {}", config::now_millis(), message);
     }
 }
 
@@ -217,6 +266,18 @@ fn user_moved_on(target: isize, since_capture: Instant) -> bool {
     // Sans nouvelle entrée, l'inactivité mesurée a grandi d'autant que le temps
     // écoulé depuis notre repère. Nettement moins : quelqu'un a tapé entre-temps.
     crate::selection::idle_millis() + INPUT_TOLERANCE_MS < elapsed
+}
+
+/// Forme de comparaison d'un texte : fins de ligne unifiées, bords rognés.
+///
+/// **Indispensable.** Windows livre du CRLF, les modèles répondent en LF. Sans
+/// cette normalisation, « Bonjour\r\n » et « Bonjour\n » passent pour deux
+/// textes différents : l'application colle une correction qui ne corrige rien —
+/// invisible à l'écran —, puis relit le champ, y retrouve du CRLF, ne
+/// reconnaît pas ce qu'elle croit avoir écrit, et recommence indéfiniment. Un
+/// appel facturé toutes les quelques secondes, sans que rien ne bouge.
+fn normalize_text(text: &str) -> String {
+    text.replace("\r\n", "\n").replace('\r', "\n").trim().to_string()
 }
 
 /// Comparaison tolérante : l'utilisateur peut écrire « Teams », « teams.exe »
@@ -243,4 +304,44 @@ fn normalize(name: &str) -> String {
 fn is_self(app_name: &str) -> bool {
     let normalized = normalize(app_name);
     normalized == "ai-text-replacer" || normalized == "ai text replacer"
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_text;
+
+    /// Le cas qui a réellement bouclé : un champ Outlook relu 42 fois d'affilée.
+    /// Le contenu était identique à chaque tour, seules les fins de ligne
+    /// différaient — CRLF à la lecture, LF dans la réponse du modèle.
+    #[test]
+    fn crlf_et_lf_sont_le_meme_texte() {
+        let capture = "\r\nHuneault, Carl\r\n\r\n\r\nHuneault, Carl\r\n";
+        let reponse = "Huneault, Carl\n\n\nHuneault, Carl";
+
+        assert_ne!(
+            capture.trim(),
+            reponse.trim(),
+            "la comparaison brute doit bien echouer : c'est l'origine du bug"
+        );
+        assert_eq!(
+            normalize_text(capture),
+            normalize_text(reponse),
+            "normalises, ces deux textes sont le meme contenu"
+        );
+    }
+
+    /// La normalisation ne doit pas aplatir une vraie correction.
+    #[test]
+    fn une_vraie_correction_reste_differente() {
+        let capture = "je voudrai savoir si il serais possible\r\n";
+        let reponse = "Je voudrais savoir s'il serait possible";
+        assert_ne!(normalize_text(capture), normalize_text(reponse));
+    }
+
+    /// Un retour chariot seul (vieux champs Mac, certains contrôles Windows)
+    /// compte aussi comme un saut de ligne.
+    #[test]
+    fn le_retour_chariot_seul_est_normalise() {
+        assert_eq!(normalize_text("a\rb"), normalize_text("a\nb"));
+    }
 }

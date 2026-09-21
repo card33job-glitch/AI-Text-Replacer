@@ -46,3 +46,8 @@ jobs:
 
       - name: Rust
         run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets
+
+      # `check` compile les tests sans les exécuter : sans cette étape, les
+      # tests de non-régression du contrôle spontané ne prouveraient rien.
+      - name: Tests Rust
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
