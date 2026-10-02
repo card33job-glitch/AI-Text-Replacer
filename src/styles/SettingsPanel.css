@@ -296,3 +296,26 @@
     margin: 0;
   }
 }
+
+/* Consignes courantes, ajoutées d'un clic au champ des réponses. */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.chip {
+  padding: 3px 10px;
+  border: 1px solid #ddd;
+  border-radius: 999px;
+  background: #fafafa;
+  color: #555;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: #bbb;
+  background: #f0f0f0;
+}

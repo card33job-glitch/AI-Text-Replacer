@@ -226,11 +226,23 @@ export default function Popup() {
         </div>
       ) : selection.text.trim() === '' ? (
         <div className="popup-empty">
-          <p>Aucun texte sélectionné.</p>
-          <p className="hint">
-            Sélectionnez du texte dans Teams, Outlook ou votre navigateur, puis appuyez
-            sur le raccourci.
-          </p>
+          {selection.intent === REPLY ? (
+            <>
+              <p>Aucun message trouvé.</p>
+              <p className="hint">
+                Ouvrez le courriel dans Outlook ou la conversation dans Teams, ou
+                sélectionnez le message auquel répondre, puis appuyez sur le raccourci.
+              </p>
+            </>
+          ) : (
+            <>
+              <p>Aucun texte sélectionné.</p>
+              <p className="hint">
+                Sélectionnez du texte dans Teams, Outlook ou votre navigateur, puis appuyez
+                sur le raccourci.
+              </p>
+            </>
+          )}
           <button className="ghost-btn" onClick={() => void invoke('open_main_window')}>
             Ouvrir l'application
           </button>

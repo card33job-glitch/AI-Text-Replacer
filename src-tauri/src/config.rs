@@ -142,6 +142,10 @@ pub struct AppConfig {
     /// Consignes ajoutées à chaque prompt (ex: "vouvoie toujours").
     #[serde(default)]
     pub custom_instructions: String,
+    /// Consignes propres aux réponses proposées (« québécois, amical »),
+    /// ajoutées après les consignes permanentes.
+    #[serde(default)]
+    pub reply_instructions: String,
     #[serde(default)]
     pub start_minimized: bool,
     /// Lance l'application à l'ouverture de session (clé `Run` sous Windows,
@@ -287,6 +291,7 @@ impl Default for AppConfig {
             preview_before_replace: false,
             target_language: default_language(),
             custom_instructions: String::new(),
+            reply_instructions: String::new(),
             start_minimized: false,
             start_at_login: false,
             proactive: ProactiveConfig::default(),

@@ -5,6 +5,7 @@ pub mod clipboard;
 pub mod commands;
 pub mod config;
 pub mod confluence;
+pub mod inbox;
 pub mod permissions;
 pub mod popup;
 pub mod proactive;

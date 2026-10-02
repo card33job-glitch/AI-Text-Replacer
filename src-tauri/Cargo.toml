@@ -31,6 +31,8 @@ enigo = "0.1"
 winapi = { version = "0.3", features = ["winuser", "processthreadsapi", "windef", "minwindef", "handleapi", "winnt", "sysinfoapi", "winbase"] }
 # Clé `Run` de l'utilisateur courant, pour le démarrage automatique.
 winreg = "0.52"
+# Lecture du message reçu (Outlook, Teams) sans sélection, via UI Automation.
+uiautomation = "0.25"
 
 # Versions alignées sur celles que Tauri 1.8 tire déjà via tao, pour éviter
 # deux copies incompatibles de `objc` dans le même binaire.

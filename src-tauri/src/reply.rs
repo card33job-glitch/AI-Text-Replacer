@@ -115,12 +115,22 @@ fn closest<'a>(query: &[String], texts: &[&'a str], limit: usize) -> Vec<usize> 
     }
 }
 
-const SYSTEM: &str = "Tu rédiges, au nom de l'utilisateur, la réponse à un message qu'il a reçu \
+/// Sépare le message à traiter de la conversation qui l'entoure, lue dans
+/// l'application. Voir le module `inbox`.
+pub const THREAD_MARKER: &str = "CONVERSATION :";
+
+const SYSTEM: &str ="Tu rédiges, au nom de l'utilisateur, la réponse à un message qu'il a reçu \
 (Teams, courriel, ticket…).
 
 Le texte placé sous « MESSAGE » est le plus souvent le message reçu auquel répondre. \
 Il peut aussi être un brouillon ou une consigne de l'utilisateur décrivant la réponse voulue : \
 dans ce cas, rédige cette réponse.
+
+Une section « CONVERSATION » peut suivre le message : ce sont les derniers échanges \
+(jusqu'à dix messages de discussion, ou le fil du courriel). « Moi » y désigne l'utilisateur. \
+Lis-la d'abord pour te mettre en contexte : de quoi on parle, ce qui a déjà été dit, demandé \
+ou promis, le registre de la discussion. Réponds au MESSAGE en t'appuyant sur ce contexte, \
+sans répéter ce que l'utilisateur a déjà écrit ni redemander ce qui a déjà été répondu.
 
 Pour le fond, appuie-toi sur la DOCUMENTATION (extraits du Confluence de l'entreprise) \
 et sur les RÉPONSES PASSÉES de l'utilisateur, qu'il a lui-même validées. \
@@ -152,9 +162,12 @@ pub async fn suggest(
     if message.trim().is_empty() {
         return Err("Aucun message auquel répondre.".to_string());
     }
-    let query = tokenize(message);
+    // La recherche porte sur le message seul : le fil cité parle souvent
+    // d'autre chose et brouillerait les passages retenus.
+    let focus = message.split(THREAD_MARKER).next().unwrap_or(message);
+    let query = tokenize(focus);
 
-    let passages = crate::confluence::search(app, message, MAX_PASSAGES);
+    let passages = crate::confluence::search(app, focus, MAX_PASSAGES);
 
     let remembered = memory(app);
     let remembered_texts: Vec<&str> = remembered.iter().map(|r| r.message.as_str()).collect();
@@ -213,6 +226,15 @@ pub async fn suggest(
     if !cfg.custom_instructions.trim().is_empty() {
         system.push_str("\n\nConsignes supplémentaires de l'utilisateur :\n");
         system.push_str(cfg.custom_instructions.trim());
+    }
+    // Choisies exprès pour les réponses : elles priment sur le ton qu'on
+    // déduirait des exemples, mais pas sur une consigne donnée à la volée.
+    if !cfg.reply_instructions.trim().is_empty() {
+        system.push_str(
+            "\n\nConsignes de l'utilisateur pour ses réponses, prioritaires sur le ton \
+             des exemples (une CONSIGNE POUR CETTE RÉPONSE prime sur elles) :\n",
+        );
+        system.push_str(cfg.reply_instructions.trim());
     }
 
     let text = crate::ai::complete(cfg, provider, &system, &prompt).await?;

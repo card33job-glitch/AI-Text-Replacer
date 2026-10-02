@@ -36,7 +36,17 @@ const TARGET_LANGUAGES = [
   { value: 'français', label: 'Français' },
 ]
 
-const IS_MAC = navigator.userAgent.includes('Mac')
+/** Consignes courantes pour les réponses, ajoutées d'un clic au champ libre. */
+const REPLY_PRESETS = [
+  'français québécois',
+  'ton amical',
+  'ton formel',
+  'vouvoiement',
+  'tutoiement',
+  'réponses courtes',
+]
+
+const IS_MAC =navigator.userAgent.includes('Mac')
 
 /** Traduit un événement clavier en accélérateur Tauri ("Ctrl+Shift+T"). */
 function toAccelerator(e: React.KeyboardEvent<HTMLInputElement>): string | null {
@@ -591,6 +601,37 @@ export default function SettingsPanel() {
           Le raccourci « Proposer une réponse » rédige une réponse au message sélectionné en
           s'appuyant sur une copie locale de votre Confluence et sur les réponses que vous
           avez déjà envoyées avec lui.
+        </p>
+
+        <label htmlFor="reply-instructions">Consignes pour les réponses :</label>
+        <textarea
+          id="reply-instructions"
+          rows={3}
+          value={config.replyInstructions ?? ''}
+          onChange={(e) => patch({ replyInstructions: e.target.value })}
+          placeholder="Ex: français québécois, ton amical, tutoie mes collègues, signe « Steve »."
+        />
+        <div className="chip-row">
+          {REPLY_PRESETS.map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              className="chip"
+              onClick={() => {
+                const current = (config.replyInstructions ?? '').trim()
+                patch({
+                  replyInstructions: current ? `${current.replace(/[.,;]$/, '')}, ${preset}` : preset,
+                })
+              }}
+            >
+              + {preset}
+            </button>
+          ))}
+        </div>
+        <p className="help-text">
+          Appliquées à chaque réponse proposée, en plus des consignes permanentes. Elles
+          priment sur le ton déduit de vos réponses passées ; le champ « Ajuster » de la
+          popup prime sur elles.
         </p>
 
         <label htmlFor="confluence-url">Adresse de Confluence :</label>

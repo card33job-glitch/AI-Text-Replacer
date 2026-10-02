@@ -76,6 +76,35 @@ pub fn unregister_all(app: &AppHandle) {
     let _ = app.global_shortcut_manager().unregister_all();
 }
 
+/// Message auquel proposer une réponse : la sélection si l'utilisateur en a
+/// fait une, et elle seule ; sinon le dernier message reçu, lu dans
+/// l'application. Jamais de `Ctrl+A` : dans un fil de discussion, il
+/// sélectionnerait toute la page.
+fn capture_reply_message(app: &AppHandle) -> String {
+    let app_name = crate::selection::foreground_app().unwrap_or_default();
+
+    let selected = match crate::inbox::focused_selection() {
+        Ok(Some(text)) if !text.trim().is_empty() => text,
+        // Une liste a le focus : `Ctrl+C` copierait l'élément (le courriel
+        // entier dans Outlook), pas une sélection de texte.
+        Ok(None) => String::new(),
+        // Pas de sélection lisible par l'accessibilité, ou application qui ne
+        // la publie pas : le presse-papiers tranche.
+        _ => crate::selection::capture_with_mode(app, crate::config::CAPTURE_SELECTION)
+            .unwrap_or_default(),
+    };
+    if !selected.trim().is_empty() {
+        return crate::inbox::with_context(
+            &selected,
+            crate::selection::target_window(),
+            &app_name,
+        );
+    }
+
+    crate::inbox::last_received(crate::selection::target_window(), &app_name)
+        .unwrap_or_default()
+}
+
 /// Déclenché à chaque pression d'un raccourci global.
 fn on_trigger(app: AppHandle, action: String) {
     if !try_begin() {
@@ -90,15 +119,7 @@ fn on_trigger(app: AppHandle, action: String) {
     // gestionnaire de raccourcis évite de bloquer les pressions suivantes.
     std::thread::spawn(move || {
         if action == REPLY_ACTION {
-            // Le message auquel répondre se lit, il ne s'édite pas : on le
-            // sélectionne dans le fil, où « tout le champ » n'a pas de sens.
-            // Sans sélection, on se rabat sur le champ de saisie, qui contient
-            // alors un brouillon ou une consigne de réponse.
-            let text = crate::selection::capture_with_mode(
-                &app,
-                crate::config::CAPTURE_SELECTION_THEN_FIELD,
-            )
-            .unwrap_or_default();
+            let text = capture_reply_message(&app);
             if let Err(e) = crate::popup::show_with_intent(&app, text, action) {
                 eprintln!("Affichage de la popup impossible: {}", e);
             }

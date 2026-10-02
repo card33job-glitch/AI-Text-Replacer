@@ -9,6 +9,7 @@ mod clipboard;
 mod commands;
 mod config;
 mod confluence;
+mod inbox;
 mod permissions;
 mod popup;
 mod proactive;

@@ -51,7 +51,7 @@ export const SHORTCUT_SLOTS: { action: string; label: string; help: string }[] =
   {
     action: 'reply',
     label: 'Proposer une réponse',
-    help: "Sélectionnez le message reçu, puis appuyez : une réponse est rédigée d'après votre Confluence et vos réponses passées, et s'affiche pour relecture. Sans sélection, c'est votre brouillon qui sert de point de départ.",
+    help: "Dans Outlook ou Teams, appuyez : une réponse au dernier message reçu est rédigée d'après votre Confluence et vos réponses passées, et s'affiche pour relecture. Si vous avez sélectionné du texte, seule la sélection est prise en compte.",
   },
 ]
 
@@ -98,6 +98,7 @@ export interface AppConfig {
   previewBeforeReplace: boolean
   targetLanguage: string
   customInstructions: string
+  replyInstructions: string
   startMinimized: boolean
   startAtLogin: boolean
   captureMode: CaptureMode

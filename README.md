@@ -37,11 +37,28 @@ sauvegarde.
 
 ### Réponses suggérées
 
-Sélectionnez un message reçu (Teams, Outlook, un ticket…) et appuyez sur
-`Ctrl+Shift+Y`. Une popup s'ouvre avec une réponse rédigée, **modifiable**, la liste des
-pages Confluence consultées (cliquables) et un champ pour ajuster puis régénérer (« plus
-court », « tutoie-le »). Sans sélection, c'est le contenu du champ de saisie qui sert : un
-brouillon ou une consigne (« dis-lui que le VPN se configure via FortiClient »).
+Dans Outlook ou Teams, appuyez sur `Ctrl+Shift+Y`. Une popup s'ouvre avec une réponse
+rédigée, **modifiable**, la liste des pages Confluence consultées (cliquables) et un champ
+pour ajuster puis régénérer (« plus court », « tutoie-le »).
+
+Le message auquel répondre est :
+
+- **la sélection**, si vous en avez fait une, et elle seule (un passage précis, un
+  ticket dans le navigateur, ou un brouillon que vous avez écrit) ;
+- **sinon le dernier message reçu**, lu directement dans l'application via
+  l'accessibilité Windows : le courriel ouvert dans Outlook (version classique), le
+  dernier message de votre interlocuteur dans une conversation Teams. Aucune touche
+  n'est simulée : rien ne se sélectionne à l'écran.
+
+Dans les deux cas, la conversation est jointe pour que la réponse tienne compte de ce qui
+a déjà été dit : les **dix derniers messages** dans Teams (y compris ce que vous avez
+écrit depuis), le fil du courriel dans Outlook. Dans les autres applications,
+sélectionnez le message ; il n'y a alors pas de contexte.
+
+Le champ **Consignes pour les réponses** des Paramètres fixe le ton de toutes les
+propositions (« français québécois, ton amical, tutoie mes collègues »). Des boutons
+ajoutent d'un clic les consignes courantes. Elles priment sur le ton déduit de vos réponses
+passées ; le champ « Ajuster » de la popup prime sur elles.
 
 La réponse s'appuie sur trois sources :
 
@@ -231,6 +248,7 @@ src-tauri/src/
 ├── popup.rs                positionnement de la popup au curseur
 ├── ai.rs                   appels OpenAI / Claude / Groq / local
 ├── reply.rs                réponses suggérées : contexte, prompt, mémoire des réponses
+├── inbox.rs                lecture du message reçu dans Outlook / Teams (UI Automation)
 ├── confluence.rs           copie locale de Confluence et recherche dedans
 ├── search.rs               index plein texte BM25
 ├── config.rs               config et historique persistés
