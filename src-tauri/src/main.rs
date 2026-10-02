@@ -7,6 +7,7 @@ mod ai;
 mod autostart;
 mod clipboard;
 mod commands;
+mod compose;
 mod config;
 mod confluence;
 mod inbox;

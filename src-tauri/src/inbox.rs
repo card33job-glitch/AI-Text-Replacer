@@ -50,6 +50,11 @@ fn read_source(window: isize, app_name: &str) -> Option<Source> {
     }
 }
 
+/// Bulles de la conversation Teams ouverte dans `window`.
+pub fn chat_messages(window: isize) -> Vec<ChatMessage> {
+    platform::teams_messages(window)
+}
+
 /// Dernier message reçu dans la fenêtre `window`, suivi de la conversation
 /// qui l'entoure : le courriel ouvert dans Outlook, le dernier message
 /// d'autrui dans une conversation Teams.

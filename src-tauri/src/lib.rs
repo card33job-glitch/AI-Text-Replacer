@@ -3,6 +3,7 @@ pub mod ai;
 pub mod autostart;
 pub mod clipboard;
 pub mod commands;
+pub mod compose;
 pub mod config;
 pub mod confluence;
 pub mod inbox;

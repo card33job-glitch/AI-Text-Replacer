@@ -503,6 +503,27 @@ pub fn capture_with_mode(app: &AppHandle, mode: &str) -> Result<String, String> 
     Ok(captured)
 }
 
+/// `Ctrl+A` (`Cmd+A` sur macOS) dans l'élément qui a le focus.
+pub fn select_all() {
+    let mut enigo = Enigo::new();
+    wait_for_clean_modifiers(&mut enigo);
+    send_select_all(&mut enigo);
+}
+
+/// `Ctrl` + une lettre, par exemple `Ctrl+R` pour « Répondre » dans Outlook.
+pub fn press_ctrl(letter: char) {
+    press_ctrl_key(Key::Layout(letter));
+}
+
+/// `Ctrl` + une touche, par exemple `Ctrl+Début`.
+pub fn press_ctrl_key(key: Key) {
+    let mut enigo = Enigo::new();
+    wait_for_clean_modifiers(&mut enigo);
+    enigo.key_down(Key::Control);
+    enigo.key_click(key);
+    enigo.key_up(Key::Control);
+}
+
 /// Replie la sélection laissée par un `Ctrl+A` dont on ne fera rien.
 ///
 /// **Indispensable après toute capture non suivie d'un collage.** `Ctrl+A`

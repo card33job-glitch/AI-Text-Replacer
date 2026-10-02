@@ -37,9 +37,21 @@ sauvegarde.
 
 ### Réponses suggérées
 
-Dans Outlook ou Teams, appuyez sur `Ctrl+Shift+Y`. Une popup s'ouvre avec une réponse
-rédigée, **modifiable**, la liste des pages Confluence consultées (cliquables) et un champ
-pour ajuster puis régénérer (« plus court », « tutoie-le »).
+Dans Outlook ou Teams, appuyez sur `Ctrl+Shift+Y` : la réponse s'écrit **directement dans
+la zone de saisie**, sans être envoyée. Relisez, retouchez, envoyez.
+
+- **Teams** : dans la zone « Taper un message » de la conversation ouverte.
+- **Outlook** : l'application fait « Répondre » (`Ctrl+R`) si aucune réponse n'est en
+  cours, et écrit en tête du courriel, au-dessus du fil cité.
+- **Pas satisfait ?** Rappuyez sur `Ctrl+Shift+Y` sans toucher au texte : la proposition
+  est effacée et remplacée par une autre, différente de toutes les précédentes.
+- **Un brouillon dans la zone de saisie** (« dis-lui que c'est réglé ») sert de consigne :
+  la réponse est rédigée à partir de lui et le remplace.
+- Une proposition envoyée telle quelle ou presque est retenue comme réponse passée (Teams).
+
+Dans les autres applications, ou si Teams n'a pas de conversation ouverte, une popup
+s'ouvre avec la réponse modifiable, les pages Confluence consultées et un champ pour
+ajuster puis régénérer.
 
 Le message auquel répondre est :
 

@@ -51,7 +51,7 @@ export const SHORTCUT_SLOTS: { action: string; label: string; help: string }[] =
   {
     action: 'reply',
     label: 'Proposer une réponse',
-    help: "Dans Outlook ou Teams, appuyez : une réponse au dernier message reçu est rédigée d'après votre Confluence et vos réponses passées, et s'affiche pour relecture. Si vous avez sélectionné du texte, seule la sélection est prise en compte.",
+    help: "Dans Outlook ou Teams, appuyez : une réponse au dernier message reçu est rédigée d'après votre Confluence et vos réponses passées, et écrite dans la zone de saisie sans être envoyée. Rappuyez pour en obtenir une autre. Si vous avez sélectionné du texte, seule la sélection est prise en compte.",
   },
 ]
 
