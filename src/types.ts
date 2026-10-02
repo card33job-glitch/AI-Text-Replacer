@@ -48,7 +48,34 @@ export const SHORTCUT_SLOTS: { action: string; label: string; help: string }[] =
     label: 'Exécuter une consigne',
     help: "Traite le texte comme un ordre — « écris-moi un message pour demander une augmentation » — et le remplace par le résultat.",
   },
+  {
+    action: 'reply',
+    label: 'Proposer une réponse',
+    help: "Sélectionnez le message reçu, puis appuyez : une réponse est rédigée d'après votre Confluence et vos réponses passées, et s'affiche pour relecture. Sans sélection, c'est votre brouillon qui sert de point de départ.",
+  },
 ]
+
+/** Accès au site Confluence — voir src-tauri/src/confluence.rs. */
+export interface ConfluenceConfig {
+  baseUrl: string
+  /** Vide pour un jeton d'accès personnel de serveur interne. */
+  email: string
+  apiToken: string
+  /** Clés d'espaces ; vide = tous. */
+  spaces: string[]
+  autoSync: boolean
+}
+
+export interface KnowledgeStatus {
+  confluence: { pages: number; syncedAt: number | null; syncing: boolean }
+  rememberedReplies: number
+}
+
+export interface ReplySuggestion {
+  text: string
+  sources: { title: string; url: string }[]
+  pastReplies: number
+}
 
 /** Contrôle grammatical spontané — voir src-tauri/src/proactive.rs. */
 export interface ProactiveConfig {
@@ -74,6 +101,7 @@ export interface AppConfig {
   startMinimized: boolean
   startAtLogin: boolean
   captureMode: CaptureMode
+  confluence: ConfluenceConfig
 }
 
 export type CaptureMode = 'field' | 'selection' | 'selectionThenField'
@@ -116,6 +144,8 @@ export interface TransformOutcome {
 /** Payload de l'événement `selection-captured` émis vers la popup. */
 export interface CapturedSelection {
   text: string
+  /** Action lancée dès l'ouverture ('reply'), ou '' pour le menu. */
+  intent: string
   defaultProvider: ProviderId
   previewBeforeReplace: boolean
   targetLanguage: string
@@ -140,6 +170,12 @@ export const ACTIONS: ActionDefinition[] = [
     label: 'Exécuter la consigne',
     icon: '✨',
     description: 'Le texte est un ordre, pas un contenu à réécrire',
+  },
+  {
+    id: 'reply',
+    label: 'Proposer une réponse',
+    icon: '💬',
+    description: "D'après Confluence et vos réponses passées",
   },
 ]
 

@@ -85,6 +85,11 @@ pub async fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String
         }
     }
 
+    let base_url = config.confluence.base_url.trim();
+    if !base_url.is_empty() && !base_url.starts_with("https://") && !base_url.starts_with("http://") {
+        return Err("L'adresse de Confluence doit commencer par https://".to_string());
+    }
+
     let previous = config::get(&app);
     let shortcuts = config.shortcuts.clone();
     let snippets = config.snippets.clone();
@@ -140,7 +145,7 @@ pub async fn transform_text(
     let provider = provider
         .filter(|p| !p.is_empty())
         .unwrap_or_else(|| cfg.default_provider.clone());
-    let result = crate::ai::transform(&cfg, &provider, &action, &text).await?;
+    let result = produce(&app, &cfg, &provider, &action, &text).await?;
 
     let _ = config::push_history(
         &app,
@@ -189,7 +194,7 @@ async fn run_action_with(
         .unwrap_or_else(|| cfg.default_provider.clone());
 
     crate::toast::show_analyzing(&app);
-    let result = match crate::ai::transform(&cfg, &provider, &action, &text).await {
+    let result = match produce(&app, &cfg, &provider, &action, &text).await {
         Ok(result) => result,
         Err(e) => {
             // La popup prend le relais pour expliquer l'échec.
@@ -212,6 +217,93 @@ async fn run_action_with(
     );
 
     replace(app, result, done_label).await
+}
+
+/// Une réponse proposée n'est pas une réécriture du texte : elle passe par
+/// son propre assemblage de contexte, où que l'action ait été choisie.
+async fn produce(
+    app: &AppHandle,
+    cfg: &AppConfig,
+    provider: &str,
+    action: &str,
+    text: &str,
+) -> Result<String, String> {
+    if action == config::REPLY_ACTION {
+        Ok(crate::reply::suggest(app, cfg, provider, text, None).await?.text)
+    } else {
+        crate::ai::transform(cfg, provider, action, text).await
+    }
+}
+
+/// Propose une réponse au message, avec les pages Confluence consultées.
+#[tauri::command]
+pub async fn suggest_reply(
+    app: AppHandle,
+    text: String,
+    hint: Option<String>,
+    provider: Option<String>,
+) -> Result<crate::reply::Suggestion, String> {
+    let cfg = config::get(&app);
+    let provider = provider
+        .filter(|p| !p.is_empty())
+        .unwrap_or_else(|| cfg.default_provider.clone());
+    crate::reply::suggest(&app, &cfg, &provider, &text, hint.as_deref()).await
+}
+
+/// L'utilisateur garde cette réponse (copiée ou collée) : elle servira
+/// d'exemple aux prochaines propositions.
+#[tauri::command]
+pub async fn accept_reply(app: AppHandle, message: String, reply: String) -> Result<(), String> {
+    let cfg = config::get(&app);
+    let _ = config::push_history(
+        &app,
+        HistoryEntry {
+            id: format!("{}", config::now_millis()),
+            original: message.clone(),
+            transformed: reply.clone(),
+            action: config::REPLY_ACTION.to_string(),
+            provider: cfg.default_provider,
+            timestamp: config::now_millis(),
+        },
+    );
+    crate::reply::remember(&app, message, reply)
+}
+
+#[tauri::command]
+pub async fn expand_popup(app: AppHandle) -> Result<(), String> {
+    popup::expand_for_reply(&app);
+    Ok(())
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KnowledgeStatus {
+    pub confluence: crate::confluence::Status,
+    pub remembered_replies: usize,
+}
+
+#[tauri::command]
+pub async fn knowledge_status(app: AppHandle) -> Result<KnowledgeStatus, String> {
+    let handle = app.clone();
+    // Le premier appel peut lire et indexer une copie de plusieurs mégaoctets.
+    let confluence =
+        tauri::async_runtime::spawn_blocking(move || crate::confluence::status(&handle))
+            .await
+            .map_err(|e| e.to_string())?;
+    Ok(KnowledgeStatus {
+        confluence,
+        remembered_replies: crate::reply::memory(&app).len(),
+    })
+}
+
+#[tauri::command]
+pub async fn sync_confluence(app: AppHandle) -> Result<crate::confluence::Status, String> {
+    crate::confluence::sync(&app).await
+}
+
+#[tauri::command]
+pub async fn clear_reply_memory(app: AppHandle) -> Result<(), String> {
+    crate::reply::clear_memory(&app)
 }
 
 /// Colle un texte déjà transformé (utilisé après l'aperçu).

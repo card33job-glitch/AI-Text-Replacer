@@ -8,9 +8,12 @@ mod autostart;
 mod clipboard;
 mod commands;
 mod config;
+mod confluence;
 mod permissions;
 mod popup;
 mod proactive;
+mod reply;
+mod search;
 mod selection;
 mod shortcuts;
 mod toast;
@@ -76,6 +79,9 @@ fn main() {
             // il retient la dernière application active pour les Paramètres.
             proactive::start(handle.clone());
 
+            confluence::preload(handle.clone());
+            confluence::sync_if_stale(handle.clone());
+
             // Remet l'entrée de démarrage en phase avec la config : elle pointe
             // peut-être encore vers l'emplacement d'avant une mise à jour.
             if let Err(e) = autostart::sync(cfg.start_at_login) {
@@ -108,6 +114,12 @@ fn main() {
             commands::last_foreground_app,
             commands::get_history,
             commands::clear_history,
+            commands::suggest_reply,
+            commands::accept_reply,
+            commands::expand_popup,
+            commands::knowledge_status,
+            commands::sync_confluence,
+            commands::clear_reply_memory,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,19 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/tauri'
 import { listen } from '@tauri-apps/api/event'
+import { open } from '@tauri-apps/api/shell'
 import {
   ACTIONS,
   actionLabel,
   CapturedSelection,
   PROVIDER_LABELS,
+  ReplySuggestion,
   TransformOutcome,
 } from '../types'
 import '../styles/Popup.css'
 
-type Phase = 'actions' | 'working' | 'preview' | 'error'
+type Phase = 'actions' | 'working' | 'preview' | 'reply' | 'error'
+
+const REPLY = 'reply'
 
 const EMPTY: CapturedSelection = {
   text: '',
+  intent: '',
   defaultProvider: 'claude',
   previewBeforeReplace: false,
   targetLanguage: 'anglais',
@@ -25,17 +30,57 @@ export default function Popup() {
   const [pendingAction, setPendingAction] = useState<string>('')
   const [result, setResult] = useState('')
   const [error, setError] = useState('')
+  const [suggestion, setSuggestion] = useState<ReplySuggestion | null>(null)
+  const [hint, setHint] = useState('')
+  // Numéro de la dernière demande de réponse : une réponse arrivée après une
+  // nouvelle capture ne doit pas s'afficher sur le mauvais message.
+  const replyRequest = useRef(0)
+  // Au tout premier affichage, l'événement et la relecture au montage peuvent
+  // livrer la même capture : un seul appel au modèle doit partir.
+  const lastReplyStart = useRef({ text: '', at: 0 })
 
   const close = () => {
     void invoke('hide_popup')
   }
 
+  const startReply = async (text: string, extraHint: string) => {
+    const request = ++replyRequest.current
+    setPendingAction(REPLY)
+    setPhase('working')
+    setError('')
+    try {
+      const next = await invoke<ReplySuggestion>('suggest_reply', {
+        text,
+        hint: extraHint || null,
+      })
+      if (request !== replyRequest.current) return
+      setSuggestion(next)
+      setResult(next.text)
+      setPhase('reply')
+    } catch (e) {
+      if (request !== replyRequest.current) return
+      setError(String(e))
+      setPhase('error')
+    }
+  }
+
   const reset = (next: CapturedSelection) => {
+    replyRequest.current++
     setSelection(next)
     setPhase('actions')
     setPendingAction('')
     setResult('')
     setError('')
+    setSuggestion(null)
+    setHint('')
+
+    if (next.intent === REPLY && next.text.trim() !== '') {
+      const now = Date.now()
+      const last = lastReplyStart.current
+      if (last.text === next.text && now - last.at < 2000) return
+      lastReplyStart.current = { text: next.text, at: now }
+      void startReply(next.text, '')
+    }
   }
 
   useEffect(() => {
@@ -75,6 +120,11 @@ export default function Popup() {
   }, [])
 
   const run = async (action: string) => {
+    if (action === REPLY) {
+      await invoke('expand_popup')
+      await startReply(selection.text, '')
+      return
+    }
     setPendingAction(action)
     setPhase('working')
     setError('')
@@ -124,6 +174,21 @@ export default function Popup() {
   const copyResult = async () => {
     await invoke('set_clipboard', { text: result })
     close()
+  }
+
+  // Ce que l'utilisateur garde, retouches comprises, devient un exemple pour
+  // les prochaines propositions.
+  const acceptReply = () =>
+    invoke('accept_reply', { message: selection.text, reply: result }).catch(() => {})
+
+  const copyReply = async () => {
+    await acceptReply()
+    await copyResult()
+  }
+
+  const pasteReply = async () => {
+    await acceptReply()
+    await confirmReplace()
   }
 
   const preview = selection.text.replace(/\s+/g, ' ').trim()
@@ -194,7 +259,80 @@ export default function Popup() {
           {phase === 'working' && (
             <div className="popup-status">
               <span className="spinner" />
-              {pendingAction ? `${actionLabel(pendingAction)}…` : 'Traitement…'}
+              {pendingAction === REPLY
+                ? 'Recherche dans Confluence et rédaction…'
+                : pendingAction
+                  ? `${actionLabel(pendingAction)}…`
+                  : 'Traitement…'}
+            </div>
+          )}
+
+          {phase === 'reply' && (
+            <div className="popup-preview">
+              <textarea
+                className="preview-text reply-editor"
+                value={result}
+                onChange={(e) => setResult(e.target.value)}
+                aria-label="Réponse proposée, modifiable"
+              />
+              <div className="reply-sources">
+                {suggestion && suggestion.sources.length > 0 ? (
+                  <>
+                    <span>Confluence :</span>
+                    {suggestion.sources.map((s) =>
+                      s.url ? (
+                        <button
+                          key={`${s.url}-${s.title}`}
+                          className="source-link"
+                          title={s.url}
+                          onClick={() => void open(s.url)}
+                        >
+                          {s.title}
+                        </button>
+                      ) : (
+                        <span key={s.title}>{s.title}</span>
+                      ),
+                    )}
+                  </>
+                ) : (
+                  <span>Aucune page Confluence pertinente trouvée.</span>
+                )}
+                {suggestion && suggestion.pastReplies > 0 && (
+                  <span>
+                    · {suggestion.pastReplies} réponse{suggestion.pastReplies > 1 ? 's' : ''}{' '}
+                    passée{suggestion.pastReplies > 1 ? 's' : ''} en exemple
+                  </span>
+                )}
+              </div>
+              <form
+                className="reply-hint"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  void startReply(selection.text, hint)
+                }}
+              >
+                <input
+                  type="text"
+                  value={hint}
+                  onChange={(e) => setHint(e.target.value)}
+                  placeholder="Ajuster : plus court, tutoie-le, propose un appel…"
+                />
+                <button type="submit" className="ghost-btn">
+                  Régénérer
+                </button>
+              </form>
+              <div className="popup-buttons">
+                <button className="primary-btn" onClick={() => void copyReply()}>
+                  Copier
+                </button>
+                <button
+                  className="ghost-btn"
+                  onClick={() => void pasteReply()}
+                  title="Colle la réponse dans l'application d'origine, à la place de ce qui y est sélectionné"
+                >
+                  Coller à la place de la sélection
+                </button>
+              </div>
             </div>
           )}
 

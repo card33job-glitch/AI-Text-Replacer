@@ -101,7 +101,16 @@ pub async fn transform(
     if text.trim().is_empty() {
         return Err("Aucun texte à transformer".to_string());
     }
+    complete(cfg, provider, &system_prompt(action, cfg), text).await
+}
 
+/// Un échange avec le modèle : une consigne système, un message, une réponse.
+pub async fn complete(
+    cfg: &AppConfig,
+    provider: &str,
+    system: &str,
+    text: &str,
+) -> Result<String, String> {
     let pc = cfg.provider(provider);
     if provider != "local" && pc.api_key.trim().is_empty() {
         return Err(format!(
@@ -110,7 +119,6 @@ pub async fn transform(
         ));
     }
 
-    let system = system_prompt(action, cfg);
     let client = &*HTTP;
 
     let response = match provider {

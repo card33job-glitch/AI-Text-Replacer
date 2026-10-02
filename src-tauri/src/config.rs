@@ -99,8 +99,13 @@ pub fn default_shortcuts() -> Vec<ShortcutBinding> {
         binding("G", "grammar"),
         binding("R", "rephrase"),
         binding("D", "prompt"),
+        binding("Y", REPLY_ACTION),
     ]
 }
+
+/// Proposer une réponse au message capturé, à partir de Confluence et des
+/// réponses passées. Voir le module `reply`.
+pub const REPLY_ACTION: &str = "reply";
 
 fn default_provider() -> String {
     "claude".to_string()
@@ -153,6 +158,55 @@ pub struct AppConfig {
     /// Ancien champ booléen, conservé en lecture seule pour la migration.
     #[serde(default, rename = "selectAllIfEmpty", skip_serializing)]
     pub legacy_select_all: Option<bool>,
+    /// Site Confluence consulté pour proposer des réponses.
+    #[serde(default)]
+    pub confluence: ConfluenceConfig,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// Accès à Confluence : voir le module `confluence`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfluenceConfig {
+    /// « https://entreprise.atlassian.net/wiki » pour Confluence Cloud,
+    /// « https://confluence.entreprise.com » pour un serveur interne.
+    #[serde(default)]
+    pub base_url: String,
+    /// Adresse du compte Atlassian. Renseignée : authentification Cloud
+    /// (adresse + jeton API). Vide : jeton d'accès personnel d'un serveur
+    /// interne, envoyé en `Bearer`.
+    #[serde(default)]
+    pub email: String,
+    #[serde(default)]
+    pub api_token: String,
+    /// Clés des espaces à lire (« IT », « RH »). Vide = tous les espaces
+    /// visibles par le compte.
+    #[serde(default)]
+    pub spaces: Vec<String>,
+    /// Resynchronise au démarrage quand la copie locale a plus d'un jour.
+    #[serde(default = "default_true")]
+    pub auto_sync: bool,
+}
+
+impl Default for ConfluenceConfig {
+    fn default() -> Self {
+        ConfluenceConfig {
+            base_url: String::new(),
+            email: String::new(),
+            api_token: String::new(),
+            spaces: Vec::new(),
+            auto_sync: true,
+        }
+    }
+}
+
+impl ConfluenceConfig {
+    pub fn is_configured(&self) -> bool {
+        !self.base_url.trim().is_empty() && !self.api_token.trim().is_empty()
+    }
 }
 
 fn default_idle_seconds() -> u64 {
@@ -238,6 +292,7 @@ impl Default for AppConfig {
             proactive: ProactiveConfig::default(),
             capture_mode: CAPTURE_FIELD.to_string(),
             legacy_select_all: None,
+            confluence: ConfluenceConfig::default(),
         }
     }
 }
@@ -318,7 +373,7 @@ lazy_static! {
     static ref CONFIG: Mutex<Option<AppConfig>> = Mutex::new(None);
 }
 
-fn config_dir(app: &AppHandle) -> Result<PathBuf, String> {
+pub fn config_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app
         .path_resolver()
         .app_config_dir()

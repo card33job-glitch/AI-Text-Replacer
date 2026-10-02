@@ -13,6 +13,7 @@ Trois raccourcis globaux, tous reconfigurables dans les Paramètres :
 | `Ctrl+Shift+G` | Corrige la grammaire et **remplace immédiatement**, sans rien afficher |
 | `Ctrl+Shift+R` | Reformule et **remplace immédiatement**, sans rien afficher |
 | `Ctrl+Shift+T` | Ouvre un menu près du curseur : **Corriger / Reformuler / Ton professionnel / Raccourcir / Traduire / Résumer** |
+| `Ctrl+Shift+Y` | **Propose une réponse** au message sélectionné, d'après Confluence et vos réponses passées (voir plus bas) |
 
 > ⚠️ Un raccourci global est capté dans *toutes* les applications. `Ctrl+Shift+R`
 > prive donc le navigateur de son rechargement forcé — changez-le si besoin.
@@ -33,6 +34,37 @@ signature, une adresse, une formule qui revient sans cesse. Il est inséré tel 
 point d'insertion. Aucun appel au modèle : c'est instantané et gratuit. Les textes figés
 et les actions partagent le même espace de combinaisons, et un doublon est refusé à la
 sauvegarde.
+
+### Réponses suggérées
+
+Sélectionnez un message reçu (Teams, Outlook, un ticket…) et appuyez sur
+`Ctrl+Shift+Y`. Une popup s'ouvre avec une réponse rédigée, **modifiable**, la liste des
+pages Confluence consultées (cliquables) et un champ pour ajuster puis régénérer (« plus
+court », « tutoie-le »). Sans sélection, c'est le contenu du champ de saisie qui sert : un
+brouillon ou une consigne (« dis-lui que le VPN se configure via FortiClient »).
+
+La réponse s'appuie sur trois sources :
+
+- **Confluence** : l'application télécharge toutes les pages des espaces choisis et les
+  garde en copie locale, en texte brut (`confluence.json` dans le dossier de
+  configuration). Une recherche plein texte (BM25, accents et pluriels ignorés) retrouve
+  les six passages les plus proches du message. Aucune requête à Confluence n'est faite
+  au moment de répondre. La copie se met à jour au démarrage quand elle a plus d'un jour,
+  ou à la demande dans les Paramètres. Cloud (adresse courriel + jeton API) et serveur
+  interne (jeton d'accès personnel) sont gérés.
+- **Vos réponses passées** : chaque réponse que vous **copiez ou collez** depuis la
+  popup, retouches comprises, est retenue (`replies.json`, 2 000 au plus). Les plus
+  proches du nouveau message sont montrées au modèle, pour le fond et pour le ton. Plus
+  vous vous en servez, plus les propositions vous ressemblent.
+- **Vos textes corrigés** par l'application (Corriger, Reformuler…), comme exemples de
+  style.
+
+Le modèle a pour consigne de ne rien inventer qui ne figure pas dans ces sources, et de
+demander une précision plutôt que de deviner.
+
+> ⚠️ Les passages Confluence retenus et vos réponses passées sont envoyés au fournisseur
+> IA avec le message. Vérifiez que c'est permis pour votre documentation interne, ou
+> utilisez un modèle local.
 
 ### Correction automatique
 
@@ -198,6 +230,9 @@ src-tauri/src/
 ├── selection.rs            capture Ctrl+C / collage Ctrl+V / focus Windows
 ├── popup.rs                positionnement de la popup au curseur
 ├── ai.rs                   appels OpenAI / Claude / Groq / local
+├── reply.rs                réponses suggérées : contexte, prompt, mémoire des réponses
+├── confluence.rs           copie locale de Confluence et recherche dedans
+├── search.rs               index plein texte BM25
 ├── config.rs               config et historique persistés
 └── commands.rs             commandes exposées au frontend
 ```

@@ -1,4 +1,4 @@
-use crate::config::{Snippet, ShortcutBinding, MENU_ACTION};
+use crate::config::{Snippet, ShortcutBinding, MENU_ACTION, REPLY_ACTION};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, GlobalShortcutManager};
 
@@ -89,6 +89,23 @@ fn on_trigger(app: AppHandle, action: String) {
     // La capture enchaîne des attentes ; la garder hors du thread du
     // gestionnaire de raccourcis évite de bloquer les pressions suivantes.
     std::thread::spawn(move || {
+        if action == REPLY_ACTION {
+            // Le message auquel répondre se lit, il ne s'édite pas : on le
+            // sélectionne dans le fil, où « tout le champ » n'a pas de sens.
+            // Sans sélection, on se rabat sur le champ de saisie, qui contient
+            // alors un brouillon ou une consigne de réponse.
+            let text = crate::selection::capture_with_mode(
+                &app,
+                crate::config::CAPTURE_SELECTION_THEN_FIELD,
+            )
+            .unwrap_or_default();
+            if let Err(e) = crate::popup::show_with_intent(&app, text, action) {
+                eprintln!("Affichage de la popup impossible: {}", e);
+            }
+            end();
+            return;
+        }
+
         let text = crate::selection::capture_selection(&app).unwrap_or_default();
 
         if action == MENU_ACTION || text.trim().is_empty() {

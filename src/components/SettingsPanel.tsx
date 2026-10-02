@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { invoke } from '@tauri-apps/api/tauri'
+import { listen } from '@tauri-apps/api/event'
 import {
   acceleratorFor,
   AppConfig,
   CAPTURE_MODES,
   CaptureMode,
+  ConfluenceConfig,
+  KnowledgeStatus,
   PROVIDER_IDS,
   PROVIDER_LABELS,
   IDLE_SECONDS_MAX,
@@ -72,11 +75,28 @@ export default function SettingsPanel() {
   const [isSaving, setIsSaving] = useState(false)
   // Dernière application active hors la nôtre, proposée à la surveillance.
   const [lastApp, setLastApp] = useState<string | null>(null)
+  const [knowledge, setKnowledge] = useState<KnowledgeStatus | null>(null)
+  // Pages reçues pendant la synchronisation en cours (null = aucune en cours).
+  const [syncProgress, setSyncProgress] = useState<number | null>(null)
+  const [syncMessage, setSyncMessage] = useState('')
+
+  const refreshKnowledge = () => {
+    invoke<KnowledgeStatus>('knowledge_status')
+      .then(setKnowledge)
+      .catch(() => {})
+  }
 
   useEffect(() => {
     invoke<AppConfig>('get_config')
       .then(setConfig)
       .catch((e) => setError(String(e)))
+    refreshKnowledge()
+    const unlisten = listen<{ pages: number }>('confluence-sync-progress', (event) => {
+      setSyncProgress(event.payload.pages)
+    })
+    return () => {
+      void unlisten.then((fn) => fn())
+    }
   }, [])
 
   // Le backend ne retient que les applications tierces : dès que ces
@@ -185,7 +205,12 @@ export default function SettingsPanel() {
     setCapturing('')
   }
 
-  const save = async () => {
+  const patchConfluence = (changes: Partial<ConfluenceConfig>) => {
+    patch({ confluence: { ...config.confluence, ...changes } })
+  }
+
+  /** Retourne vrai si la sauvegarde a abouti. */
+  const save = async (): Promise<boolean> => {
     setIsSaving(true)
     setStatus('')
     setError('')
@@ -198,18 +223,47 @@ export default function SettingsPanel() {
         ...config.proactive,
         apps: config.proactive.apps.map((a) => a.trim()).filter(Boolean),
       },
+      confluence: {
+        ...config.confluence,
+        baseUrl: config.confluence.baseUrl.trim(),
+        spaces: config.confluence.spaces.map((s) => s.trim()).filter(Boolean),
+      },
     }
     try {
       await invoke('save_config', { config: cleaned })
       setConfig(cleaned)
       setStatus('Paramètres enregistrés. Les raccourcis sont actifs immédiatement.')
+      return true
     } catch (e) {
       setError(String(e))
       // Le backend a pu revenir aux anciens raccourcis : on resynchronise.
       invoke<AppConfig>('get_config').then(setConfig).catch(() => {})
+      return false
     } finally {
       setIsSaving(false)
     }
+  }
+
+  // La synchronisation lit la configuration enregistrée : on enregistre
+  // d'abord, sans quoi elle partirait avec l'adresse ou le jeton d'avant.
+  const syncConfluence = async () => {
+    setSyncMessage('')
+    if (!(await save())) return
+    setSyncProgress(0)
+    try {
+      const result = await invoke<KnowledgeStatus['confluence']>('sync_confluence')
+      setSyncMessage(`${result.pages} pages copiées.`)
+    } catch (e) {
+      setSyncMessage(String(e))
+    } finally {
+      setSyncProgress(null)
+      refreshKnowledge()
+    }
+  }
+
+  const clearReplies = async () => {
+    await invoke('clear_reply_memory')
+    refreshKnowledge()
   }
 
   return (
@@ -528,6 +582,115 @@ export default function SettingsPanel() {
           grammaire à corriger, et <strong>chaque relecture est un appel facturé</strong> à
           votre fournisseur — c'est le principal garde-fou contre une note de fin de mois
           inattendue.
+        </p>
+      </div>
+
+      <div className="section">
+        <h2>Réponses suggérées</h2>
+        <p className="help-text">
+          Le raccourci « Proposer une réponse » rédige une réponse au message sélectionné en
+          s'appuyant sur une copie locale de votre Confluence et sur les réponses que vous
+          avez déjà envoyées avec lui.
+        </p>
+
+        <label htmlFor="confluence-url">Adresse de Confluence :</label>
+        <input
+          id="confluence-url"
+          type="text"
+          value={config.confluence.baseUrl}
+          onChange={(e) => patchConfluence({ baseUrl: e.target.value })}
+          placeholder="https://entreprise.atlassian.net/wiki"
+        />
+        <p className="help-text">
+          Confluence Cloud : l'adresse du site suivie de <code>/wiki</code>. Serveur interne :
+          l'adresse d'accueil, sans chemin.
+        </p>
+
+        <label htmlFor="confluence-email">Adresse courriel du compte (Cloud uniquement) :</label>
+        <input
+          id="confluence-email"
+          type="text"
+          value={config.confluence.email}
+          onChange={(e) => patchConfluence({ email: e.target.value })}
+          placeholder="prenom.nom@entreprise.com"
+        />
+
+        <label htmlFor="confluence-token">Jeton d'accès :</label>
+        <input
+          id="confluence-token"
+          type="password"
+          value={config.confluence.apiToken}
+          onChange={(e) => patchConfluence({ apiToken: e.target.value })}
+        />
+        <p className="help-text">
+          Cloud : créez un jeton API sur id.atlassian.com → Sécurité → Jetons d'API. Serveur
+          interne : laissez l'adresse courriel vide et utilisez un jeton d'accès personnel
+          (Profil → Jetons d'accès personnels). Le jeton est enregistré en clair dans la
+          configuration, comme les clés des fournisseurs.
+        </p>
+
+        <label htmlFor="confluence-spaces">Espaces à lire :</label>
+        <input
+          id="confluence-spaces"
+          type="text"
+          value={config.confluence.spaces.join(', ')}
+          onChange={(e) => patchConfluence({ spaces: e.target.value.split(',') })}
+          placeholder="Vide = tous les espaces. Sinon : IT, RH, SUPPORT"
+        />
+        <p className="help-text">
+          Les clés d'espace, séparées par des virgules. Limiter aux espaces utiles donne des
+          réponses plus justes et une synchronisation plus rapide.
+        </p>
+
+        <div className="checkbox-group">
+          <label>
+            <input
+              type="checkbox"
+              checked={config.confluence.autoSync}
+              onChange={(e) => patchConfluence({ autoSync: e.target.checked })}
+            />
+            <span>Mettre à jour la copie au démarrage si elle a plus d'un jour</span>
+          </label>
+        </div>
+
+        <p className="help-text">
+          {knowledge
+            ? knowledge.confluence.pages > 0
+              ? `Copie locale : ${knowledge.confluence.pages} pages${
+                  knowledge.confluence.syncedAt
+                    ? `, mise à jour le ${new Date(knowledge.confluence.syncedAt).toLocaleString('fr-CA')}`
+                    : ''
+                }.`
+              : 'Aucune page copiée pour l\'instant.'
+            : ''}
+        </p>
+        <button
+          type="button"
+          className="add-btn"
+          onClick={() => void syncConfluence()}
+          disabled={syncProgress !== null || isSaving}
+        >
+          {syncProgress !== null
+            ? `Synchronisation… ${syncProgress} pages`
+            : 'Enregistrer et synchroniser maintenant'}
+        </button>
+        {syncMessage && <p className="help-text">{syncMessage}</p>}
+
+        <p className="help-text warning-text">
+          ⚠️ Pour rédiger une réponse, les passages Confluence les plus pertinents et vos
+          réponses passées sont envoyés au fournisseur IA choisi, avec le message. Vérifiez
+          que la politique de votre entreprise le permet, ou utilisez un modèle local.
+        </p>
+
+        <p className="help-text">
+          Réponses retenues : <strong>{knowledge?.rememberedReplies ?? 0}</strong>. Chaque
+          réponse que vous copiez ou collez depuis la proposition, retouches comprises, sert
+          d'exemple aux suivantes.{' '}
+          {(knowledge?.rememberedReplies ?? 0) > 0 && (
+            <button type="button" className="add-btn inline" onClick={() => void clearReplies()}>
+              Tout oublier
+            </button>
+          )}
         </p>
       </div>
 
