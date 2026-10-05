@@ -10,6 +10,7 @@ import {
   ReplySuggestion,
   TransformOutcome,
 } from '../types'
+import { useAccessibilityMissing } from './AccessibilityNotice'
 import '../styles/Popup.css'
 
 type Phase = 'actions' | 'working' | 'preview' | 'reply' | 'error'
@@ -26,6 +27,8 @@ const EMPTY: CapturedSelection = {
 
 export default function Popup() {
   const [selection, setSelection] = useState<CapturedSelection>(EMPTY)
+  // Sans elle, rien ne peut être copié : c'est la vraie cause du « rien de sélectionné ».
+  const accessibility = useAccessibilityMissing()
   const [phase, setPhase] = useState<Phase>('actions')
   const [pendingAction, setPendingAction] = useState<string>('')
   const [result, setResult] = useState('')
@@ -226,7 +229,21 @@ export default function Popup() {
         </div>
       ) : selection.text.trim() === '' ? (
         <div className="popup-empty">
-          {selection.intent === REPLY ? (
+          {accessibility ? (
+            <>
+              <p>Autorisation « Accessibilité » requise.</p>
+              <p className="hint">
+                Sans elle, macOS bloque la copie du texte sélectionné. Activez{' '}
+                <strong>AI Text Replacer</strong> dans Réglages Système → Confidentialité et
+                sécurité → Accessibilité, puis relancez l'application.
+              </p>
+              {accessibility.settingsUrl && (
+                <button className="ghost-btn" onClick={() => void open(accessibility.settingsUrl!)}>
+                  Ouvrir les Réglages Système
+                </button>
+              )}
+            </>
+          ) : selection.intent === REPLY ? (
             <>
               <p>Aucun message trouvé.</p>
               <p className="hint">

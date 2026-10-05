@@ -17,7 +17,11 @@ interface AccessibilityStatus {
  * simulées n'atteignent jamais l'application cible : l'outil paraît cassé sans
  * qu'aucune erreur ne soit levée. Le bandeau est la seule façon de le dire.
  */
-export default function AccessibilityNotice() {
+/**
+ * Vrai sur macOS tant que l'autorisation manque. Revérifié au retour du focus,
+ * puisqu'elle s'accorde dans les Réglages Système.
+ */
+export function useAccessibilityMissing(): AccessibilityStatus | null {
   const [status, setStatus] = useState<AccessibilityStatus | null>(null)
 
   useEffect(() => {
@@ -31,7 +35,12 @@ export default function AccessibilityNotice() {
     return () => window.removeEventListener('focus', refresh)
   }, [])
 
-  if (!status || !status.required || status.granted) return null
+  return status && status.required && !status.granted ? status : null
+}
+
+export default function AccessibilityNotice() {
+  const status = useAccessibilityMissing()
+  if (!status) return null
 
   return (
     <div className="permission-banner" role="alert">

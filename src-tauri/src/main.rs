@@ -11,6 +11,8 @@ mod compose;
 mod config;
 mod confluence;
 mod inbox;
+#[cfg(target_os = "macos")]
+mod macos;
 mod permissions;
 mod popup;
 mod proactive;
@@ -72,6 +74,12 @@ fn main() {
         .setup(|app| {
             let handle = app.handle();
             let cfg = config::get(&handle);
+
+            // Sans l'autorisation « Accessibilité », macOS jette en silence les
+            // frappes simulées : aucun raccourci ne pourrait rien copier.
+            if !permissions::status().granted {
+                permissions::request();
+            }
 
             if let Err(e) = shortcuts::register_all(&handle, &cfg.shortcuts, &cfg.snippets) {
                 eprintln!("Raccourcis globaux: {}", e);

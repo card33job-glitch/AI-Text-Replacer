@@ -404,15 +404,11 @@ fn wait_for_clean_modifiers(enigo: &mut Enigo) {
     thread::sleep(Duration::from_millis(40));
 }
 
-#[cfg(target_os = "macos")]
-const CMD: Key = Key::Meta;
-
 fn send_copy(enigo: &mut Enigo) {
     #[cfg(target_os = "macos")]
     {
-        enigo.key_down(CMD);
-        enigo.key_click(Key::Layout('c'));
-        enigo.key_up(CMD);
+        let _ = enigo;
+        crate::macos::press_command('c');
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -425,9 +421,8 @@ fn send_copy(enigo: &mut Enigo) {
 fn send_select_all(enigo: &mut Enigo) {
     #[cfg(target_os = "macos")]
     {
-        enigo.key_down(CMD);
-        enigo.key_click(Key::Layout('a'));
-        enigo.key_up(CMD);
+        let _ = enigo;
+        crate::macos::press_command('a');
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -440,9 +435,8 @@ fn send_select_all(enigo: &mut Enigo) {
 fn send_paste(enigo: &mut Enigo) {
     #[cfg(target_os = "macos")]
     {
-        enigo.key_down(CMD);
-        enigo.key_click(Key::Layout('v'));
-        enigo.key_up(CMD);
+        let _ = enigo;
+        crate::macos::press_command('v');
     }
     #[cfg(not(target_os = "macos"))]
     {

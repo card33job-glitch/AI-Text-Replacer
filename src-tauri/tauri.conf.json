@@ -28,6 +28,9 @@
     "bundle": {
       "active": true,
       "identifier": "com.aitextreplacer.app",
+      "macOS": {
+        "signingIdentity": "-"
+      },
       "icon": ["icons/icon.png", "icons/icon.ico"]
     },
     "systemTray": {

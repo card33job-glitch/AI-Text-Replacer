@@ -7,6 +7,8 @@ pub mod compose;
 pub mod config;
 pub mod confluence;
 pub mod inbox;
+#[cfg(target_os = "macos")]
+pub mod macos;
 pub mod permissions;
 pub mod popup;
 pub mod proactive;

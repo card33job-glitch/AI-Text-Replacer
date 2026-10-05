@@ -274,8 +274,13 @@ src-tauri/src/
   et un message le signale.
 - macOS : l'implémentation est complète (réactivation de l'application d'origine via
   `NSRunningApplication`, position du curseur via `NSEvent`, témoin non activable via
-  `orderFrontRegardless`), **mais elle n'a jamais été exécutée sur un Mac** — elle n'est
-  vérifiée qu'à la compilation, par la CI. Attendez-vous à des ajustements.
+  `orderFrontRegardless`). Elle compile et démarre sur un Mac Apple Silicon (macOS 26),
+  mais les raccourcis n'y ont pas encore été essayés de bout en bout.
+- macOS : `Cmd+C`, `Cmd+A` et `Cmd+V` sont envoyés par CoreGraphics (`src/macos.rs`) et
+  non par enigo, dont la traduction des lettres plante hors du thread principal depuis
+  macOS 14. La touche est cherchée dans la disposition active (AZERTY compris).
+- macOS : l'autorisation « Accessibilité » est liée à la signature du binaire. Une
+  version non signée recompilée doit être retirée puis ré-ajoutée dans les Réglages.
 - macOS : le témoin se place sous la souris et non au point d'insertion. L'équivalent du
   `GetGUIThreadInfo` de Windows demanderait un aller-retour `AXUIElement` par application.
 - macOS : l'autorisation « Accessibilité » est obligatoire. Sans elle les raccourcis se

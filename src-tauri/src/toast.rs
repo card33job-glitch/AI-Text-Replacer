@@ -136,10 +136,14 @@ fn platform_show(window: &Window) {
     // au témoin — exactement ce qu'il ne doit jamais faire.
     // `orderFrontRegardless` l'affiche sans le rendre fenêtre clé.
     match window.ns_window() {
-        Ok(handle) => unsafe {
-            let ns_window = handle as id;
-            let _: () = msg_send![ns_window, orderFrontRegardless];
-        },
+        // AppKit n'accepte de manipuler une fenêtre que depuis le thread
+        // principal ; le témoin est affiché depuis les threads des raccourcis.
+        Ok(handle) => {
+            let ns_window = handle as usize;
+            crate::macos::on_main(move || unsafe {
+                let _: () = msg_send![ns_window as id, orderFrontRegardless];
+            });
+        }
         Err(_) => {
             let _ = window.show();
         }
@@ -190,8 +194,9 @@ fn make_non_activating(window: &Window) {
     use objc::{msg_send, sel, sel_impl};
 
     if let Ok(handle) = window.ns_window() {
-        unsafe {
-            let ns_window = handle as id;
+        let ns_window = handle as usize;
+        crate::macos::on_main(move || unsafe {
+            let ns_window = ns_window as id;
             // NSStatusWindowLevel : au-dessus des fenêtres ordinaires.
             let _: () = msg_send![ns_window, setLevel: 25i64];
             // Purement informatif : le témoin laisse passer les clics.
@@ -200,7 +205,7 @@ fn make_non_activating(window: &Window) {
             // NSWindowCollectionBehaviorCanJoinAllSpaces | Transient
             let behavior: u64 = (1 << 0) | (1 << 3);
             let _: () = msg_send![ns_window, setCollectionBehavior: behavior];
-        }
+        });
     }
 }
 
